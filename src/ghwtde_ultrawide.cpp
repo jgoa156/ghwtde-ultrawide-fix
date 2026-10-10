@@ -118,16 +118,17 @@ namespace
 		// the centred picture puts their inner edge, so they fill the sides; the menu itself stays as designed
 		{ 0x4b93dd1e, { M_FILL_LEFT } },
 		{ 0xb19ce07d, { M_FILL_RIGHT } },
-		// GH5 / WoR HUD mod's Warriors of Rock loading screen: the picture (WoR_HUD_loading, 2:1 art) covers the screen
-		// at its own 2:1 shape even inside the loading container's bars group, anchored so the ring and the LOADING
-		// plate stay whole (2560x1080: 120 px off the top, 80 off the bottom); its load wheel frames follow the same
-		// mapping (kNamedFrames)
-		{ 0x468df16a, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },
+		// GH5 / WoR HUD mod's Warriors of Rock loading screen: the picture (WoR_HUD_loading) covers the screen at WoR's
+		// 16:9 shape even inside the loading container's bars group, anchored so its ring stays whole at the top; the
+		// LOADING plate is its own sprite, anchored to sit whole at the bottom (both can't fit at that shape on 21:9);
+		// the load wheel follows the picture (kNamedFrames)
+		{ 0x468df16a, { M_COVER, 0, 1, 0, 0.298f, 16.0f / 9.0f } },
 	};
 	// textures named <prefix><n>, n = 0..count-1 (animation frames), sharing one rule
 	struct NamedFrames { const char *prefix; int count; TexRule rule; };
 	const NamedFrames kNamedFrames[] = {
-		{ "WoR_HUD_load_wheel_", 64, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },   // WoR loading screen: scrolling load wheel
+		{ "WoR_HUD_load_wheel_", 64, { M_COVER, 0, 1, 0, 0.298f, 16.0f / 9.0f } },   // WoR loading screen: load wheel (with the picture)
+		{ "WoR_HUD_load_plate_", 64, { M_COVER, 0, 1, 0, 0.650f, 16.0f / 9.0f } },   // its LOADING plate: anchored to sit whole at the bottom
 	};
 
 	// QB checksum of a name (the game's texture ids): ~CRC-32 of the lower-cased text
