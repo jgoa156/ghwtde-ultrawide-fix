@@ -120,11 +120,28 @@ namespace
 		{ 0xb19ce07d, { M_FILL_RIGHT } },
 		// GH5 / WoR HUD mod's Warriors of Rock loading screen: the picture (WoR_HUD_loading, 2:1 art) covers the screen
 		// at its own 2:1 shape even inside the loading container's bars group, anchored so the ring and the LOADING
-		// plate stay whole (2560x1080: 120 px off the top, 80 off the bottom); its spinning wheel (WoR_HUD_load_wheel)
-		// follows the same mapping
+		// plate stay whole (2560x1080: 120 px off the top, 80 off the bottom); its load wheel frames follow the same
+		// mapping (kNamedFrames)
 		{ 0x468df16a, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },
-		{ 0x2eccdb9e, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },
 	};
+	// textures named <prefix><n>, n = 0..count-1 (animation frames), sharing one rule
+	struct NamedFrames { const char *prefix; int count; TexRule rule; };
+	const NamedFrames kNamedFrames[] = {
+		{ "WoR_HUD_load_wheel_", 32, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },   // WoR loading screen: scrolling load wheel
+	};
+
+	// QB checksum of a name (the game's texture ids): ~CRC-32 of the lower-cased text
+	uint32_t qbkey(const char *s)
+	{
+		uint32_t c = 0xffffffffu;
+		for (; *s; ++s)
+		{
+			c ^= static_cast<uint8_t>(*s >= 'A' && *s <= 'Z' ? *s + 32 : *s);
+			for (int k = 0; k < 8; ++k)
+				c = (c >> 1) ^ (0xedb88320u & (0u - (c & 1)));
+		}
+		return c;   // ~(~crc) : the game's key is the CRC register without the final inversion
+	}
 
 	// ---- settings ----
 	bool g_enabled = true;
@@ -1235,6 +1252,13 @@ namespace
 		g_id_modes.clear();
 		for (const auto &r : kDefaultTex)
 			g_tex_rules[r.first] = r.second;
+		for (const auto &f : kNamedFrames)
+			for (int n = 0; n < f.count; ++n)
+			{
+				char name[96];
+				sprintf_s(name, "%s%d", f.prefix, n);
+				g_tex_rules[qbkey(name)] = f.rule;
+			}
 		for (const auto &r : kDefaultIds)
 			g_id_modes[r.id] = r.mode;
 		read_tex(runtime, "Stretch", M_STRETCH);

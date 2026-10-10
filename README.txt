@@ -48,7 +48,7 @@ SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
                                    -> cover)
   Built in as well: song list side art 4b93dd1e / b19ce07d grow from the screen edges; title screen overlay
   f8d1f74f stretches; the loading screen's movie is scaled to cover the screen; the GH5 / WoR HUD mod's Warriors
-  of Rock loading picture 468df16a and its wheel 2eccdb9e cover the screen at the art's own 2:1 shape, anchored at 60%
+  of Rock loading picture 468df16a and its wheel frames (WoR_HUD_load_wheel_0..31) cover the screen at the art's own 2:1 shape, anchored at 60%
   (its ring and LOADING plate stay whole).
   AutoAnchor=0           experimental: pin any panel whose art touches a screen edge
   AnchorInHud=0          allow pinning inside the gameplay HUD
