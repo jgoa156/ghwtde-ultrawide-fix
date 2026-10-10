@@ -84,6 +84,10 @@ namespace
 		Mode mode = M_STRETCH;
 		float a = 0, b = 1;                          // slice / tile band, as fractions of the image width
 		float feather = 0;                           // tile: fade-in width of the kept part's left edge (fraction)
+		float ay = 0.5f;                             // cover: the screen height fraction that stays put (0.5 = centred)
+		float aspect = 0;                            // cover: the picture's own width/height (0 = the 16:9 canvas); with it
+		                                             // the height becomes width/aspect, and every sprite with the rule
+		                                             // (not only full-screen ones) follows the same mapping
 	};
 
 	// a texture rule that only applies under one element (any ancestor) and, optionally, to sprites at one canvas x
@@ -114,6 +118,12 @@ namespace
 		// the centred picture puts their inner edge, so they fill the sides; the menu itself stays as designed
 		{ 0x4b93dd1e, { M_FILL_LEFT } },
 		{ 0xb19ce07d, { M_FILL_RIGHT } },
+		// GH5 / WoR HUD mod's Warriors of Rock loading screen: the picture (WoR_HUD_loading, 2:1 art) covers the screen
+		// at its own 2:1 shape even inside the loading container's bars group, anchored so the ring and the LOADING
+		// plate stay whole (2560x1080: 120 px off the top, 80 off the bottom); its spinning wheel (WoR_HUD_load_wheel)
+		// follows the same mapping
+		{ 0x468df16a, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },
+		{ 0x2eccdb9e, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },
 	};
 
 	// ---- settings ----
@@ -871,7 +881,9 @@ namespace
 				if (std::fabs(g.minx * c - sr.cx0) <= 4 && std::fabs(g.maxx * c - sr.cx1) <= 4)
 					rule = &sr.rule;
 			}
-			if (group == M_BARS)
+			if (group == M_BARS && rule != nullptr && rule->mode == M_COVER && ((full_w && full_h) || rule->aspect > 0))
+				m = M_COVER;                         // a full-screen picture with its own cover rule wins over the bars
+			else if (group == M_BARS)
 				m = M_CENTRE, bars = true;
 			else if (group == M_COVER)
 				m = M_COVER;                         // the whole layout scales evenly (x as stretched, y by the same)
@@ -992,7 +1004,13 @@ namespace
 
 		if (have_geom && m == M_COVER)
 		{
-			const float s = fw / w169, cy = fh * 0.5f;      // uniform scale: full width, height grows the same
+			// uniform scale: full width, height grows the same around the rule's anchor (default: the middle); a rule
+			// with the picture's own aspect makes the height width/aspect instead (never shorter than the screen)
+			const bool own = rule != nullptr && rule->mode == M_COVER;
+			float s = fw / w169;
+			if (own && rule->aspect > 0)
+				s = fw / rule->aspect / fh > 1.0f ? fw / rule->aspect / fh : 1.0f;
+			const float cy = fh * (own ? rule->ay : 0.5f);
 			for (int i = 0; i < 4; ++i)
 			{
 				float *y = reinterpret_cast<float *>(g.v + i * g.stride + 4);
