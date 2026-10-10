@@ -127,7 +127,7 @@ namespace
 	// textures named <prefix><n>, n = 0..count-1 (animation frames), sharing one rule
 	struct NamedFrames { const char *prefix; int count; TexRule rule; };
 	const NamedFrames kNamedFrames[] = {
-		{ "WoR_HUD_load_wheel_", 32, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },   // WoR loading screen: scrolling load wheel
+		{ "WoR_HUD_load_wheel_", 64, { M_COVER, 0, 1, 0, 0.6f, 2.0f } },   // WoR loading screen: scrolling load wheel
 	};
 
 	// QB checksum of a name (the game's texture ids): ~CRC-32 of the lower-cased text
