@@ -1,6 +1,5 @@
 r"""Builds the release zip: dist/GHWTDE-Ultrawide-Fix_<version>.zip (and a copy in releases/).
-Run build.bat first. The ReShade d3d9.dll it bundles comes from RESHADE_DIR (env, default E:Devghwt
-eshade-6.8.0)."""
+Run build.bat first. The ReShade d3d9.dll it bundles comes from RESHADE_DIR (env, default E:/Dev/ghwt/reshade-6.8.0)."""
 import os, shutil
 
 VERSION = '0.2-beta'

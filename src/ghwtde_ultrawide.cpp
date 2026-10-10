@@ -147,6 +147,7 @@ namespace
 	// ---- settings ----
 	bool g_enabled = true;
 	bool g_element_modes = true;
+	bool g_loading_fill = false;                     // loading screens: false = 16:9 with black side bars, true = fill the width
 	bool g_auto_anchor = false;
 	bool g_anchor_in_hud = false;
 	bool g_catalog_on = true;
@@ -899,7 +900,7 @@ namespace
 				if (std::fabs(g.minx * c - sr.cx0) <= 4 && std::fabs(g.maxx * c - sr.cx1) <= 4)
 					rule = &sr.rule;
 			}
-			if (group == M_BARS && rule != nullptr && rule->mode == M_COVER && ((full_w && full_h) || rule->aspect > 0))
+			if (group == M_BARS && g_loading_fill && rule != nullptr && rule->mode == M_COVER && ((full_w && full_h) || rule->aspect > 0))
 				m = M_COVER;                         // a full-screen picture with its own cover rule wins over the bars
 			else if (group == M_BARS)
 				m = M_CENTRE, bars = true;
@@ -947,9 +948,14 @@ namespace
 			frame_now - g_movie_screen_frame <= 30 && is_movie_layout(dev))
 		{
 			movie = true;
-			m = M_STRETCH;                                // full viewport; movie_up_hook scales the height
-			g_cover_up_pending = true;
-			g_movie_covered_frame = frame_now;
+			if (g_loading_fill)
+			{
+				m = M_STRETCH;                            // full viewport; movie_up_hook scales the height
+				g_cover_up_pending = true;
+				g_movie_covered_frame = frame_now;
+			}
+			else
+				m = M_CENTRE;                             // 16:9 in the middle; the bars keep the sides black
 		}
 		if (m == M_KEEP)
 			m = M_CENTRE;
@@ -1240,6 +1246,7 @@ namespace
 		g_runtime = runtime;
 		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "Enabled", g_enabled);
 		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "ElementModes", g_element_modes);
+		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "LoadingFill", g_loading_fill);
 		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "AutoAnchor", g_auto_anchor);
 		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "AnchorInHud", g_anchor_in_hud);
 		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "Catalog", g_catalog_on);
@@ -1285,6 +1292,8 @@ namespace
 			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "Enabled", g_enabled);
 		if (ImGui::Checkbox("Per-element modes (backgrounds, side panels, loading bars)", &g_element_modes))
 			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "ElementModes", g_element_modes);
+		if (ImGui::Checkbox("Loading screens fill the width (crops top and bottom; off = 16:9 with black bars)", &g_loading_fill))
+			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "LoadingFill", g_loading_fill);
 		if (ImGui::Checkbox("Experimental: pin any panel touching a screen edge", &g_auto_anchor))
 			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "AutoAnchor", g_auto_anchor);
 		ImGui::Text("Hooks: %s", g_hook_status.c_str());

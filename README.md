@@ -32,8 +32,8 @@ its screen element, ancestors and texture checksum. Rules then pick a mode per d
 - **cover** / **tile** / **slice** / **span** / **fill-left/right** (sprite vertices edited: backgrounds fill the
   screen without distortion), **cover** for whole layouts (YOU ROCK screens), **bars** (black sides).
 - Text glyphs are queued by the engine and drawn later, so each text is flushed inside its wrapper to draw with its
-  group's mode. The loading screen's movie (a `DrawPrimitiveUP` outside the sprite system) is covered through a hook
-  on the device's `DrawPrimitiveUP`.
+  group's mode. Loading screens are 16:9 with black side bars by default (`LoadingFill=1`: their movie, a
+  `DrawPrimitiveUP` outside the sprite system, is covered through a hook on the device's `DrawPrimitiveUP`).
 
 Every new element is logged once to `ghwtde_ultrawide_catalog.txt` (ids, textures, rects) for writing new rules.
 

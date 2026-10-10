@@ -7,8 +7,8 @@ whole 2D layer sideways: HUD, menus, text. This ReShade add-on draws that layer 
 (1920x1080 inside 2560x1080), unstretched. The 3D scene (venue, band, highway) keeps the full width.
 
 Per screen (v0.2): full-screen gradients and dimmers stretch to the full width; full-screen backgrounds fill the
-screen without distortion (title screen wall, song list side art, loading screen movie, every YOU ROCK theme);
-side panels (Career / Quickplay mode select, instrument select, the song intro) pin to the screen's left edge with
+screen without distortion (title screen wall, song list side art, every YOU ROCK theme); loading screens are a
+16:9 picture with black side bars (sharper than zooming the art; see LoadingFill); side panels (Career / Quickplay mode select, instrument select, the song intro) pin to the screen's left edge with
 their text. Everything else stays a centred 16:9 picture. Also bundled with the GH5 / WoR HUD mod.
 
 REQUIREMENTS
@@ -43,13 +43,15 @@ SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
                                    its left edge fading in over width f (built in: title wall 5049d8f2:0.58:1:0.04)
   Element groups (hex element ids; the element and everything under it):
     Left=  Right=  Centre=  Bars=  (built in: select-mode paper 97dc36b4 + header 29aa72ea, instrument paper
-                                   98fe6fdc, song intro 43823aca -> left; loading screen aed7cd2e -> bars when
-                                   its movie can't be covered; YOU ROCK layouts a39d36f7, c5fe03f7, 427ea435
+                                   98fe6fdc, song intro 43823aca -> left; loading screen aed7cd2e -> bars;
+                                   YOU ROCK layouts a39d36f7, c5fe03f7, 427ea435
                                    -> cover)
   Built in as well: song list side art 4b93dd1e / b19ce07d grow from the screen edges; title screen overlay
-  f8d1f74f stretches; the loading screen's movie is scaled to cover the screen; the GH5 / WoR HUD mod's Warriors
-  of Rock loading picture 468df16a and its wheel frames (WoR_HUD_load_wheel_0..63) cover the screen at the art's own 2:1 shape, anchored at 60%
-  (its ring and LOADING plate stay whole).
+  f8d1f74f stretches.
+  LoadingFill=0          1 = loading screens fill the width instead (the movie is scaled to cover the screen; the
+                         GH5 / WoR HUD mod's Warriors of Rock loading picture 468df16a, wheel and plate frames cover
+                         it at 16:9, anchored so the ring and the LOADING plate stay whole). Also a checkbox in the
+                         add-on's overlay.
   AutoAnchor=0           experimental: pin any panel whose art touches a screen edge
   AnchorInHud=0          allow pinning inside the gameplay HUD
   Catalog=1              log every new element once to ghwtde_ultrawide_catalog.txt (ids, textures, rects)
