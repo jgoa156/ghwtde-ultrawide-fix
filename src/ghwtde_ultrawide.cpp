@@ -105,6 +105,10 @@ namespace
 		{ 0x98fe6fdc, M_LEFT },   // "select instrument" paper (ui_select_instrument), with its menu
 		{ 0x43823aca, M_LEFT },   // intro_container: song title / artist at the start of a song
 		{ 0xaed7cd2e, M_BARS },   // loading_screen_container (bars unless its movie got covered, see movie_up_hook)
+		// title screen flashes (ui_boot_iis: glow 5c54178d anchored at the bottom-right / bottom-left corner, scaled
+		// 0.5..1 at random): pinned to their own screen edge, so they burst from the screen's corners, not the 16:9 ones
+		{ 0x3415d542, M_RIGHT },
+		{ 0xce1ae821, M_LEFT },
 		// YOU ROCK screens (all four YouRockTheme options are 16:9 sprite layouts): the whole layout scales evenly
 		// until it fills the width (sprites; texts stay centred)
 		{ 0xa39d36f7, M_COVER },  // You_Rock: Metallica (you_rock_ghm) and Van Halen (you_rock_ghvh)

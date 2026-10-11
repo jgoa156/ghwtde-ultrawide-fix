@@ -43,7 +43,8 @@ SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
                                    its left edge fading in over width f (built in: title wall 5049d8f2:0.58:1:0.04)
   Element groups (hex element ids; the element and everything under it):
     Left=  Right=  Centre=  Bars=  (built in: select-mode paper 97dc36b4 + header 29aa72ea, instrument paper
-                                   98fe6fdc, song intro 43823aca -> left; loading screen aed7cd2e -> bars;
+                                   98fe6fdc, song intro 43823aca, title screen flash ce1ae821 -> left;
+                                   title screen flash 3415d542 -> right; loading screen aed7cd2e -> bars;
                                    YOU ROCK layouts a39d36f7, c5fe03f7, 427ea435, the exploding text
                                    6139b417 and its sparks 32cc87b4, the WoR HUD mod's YOU ROCK bolts
                                    881079ee -> cover)
