@@ -2,7 +2,7 @@ r"""Builds the release zip: dist/GHWTDE-Ultrawide-Fix_<version>.zip (and a copy 
 Run build.bat first. The ReShade d3d9.dll it bundles comes from RESHADE_DIR (env, default E:/Dev/ghwt/reshade-6.8.0)."""
 import os, shutil
 
-VERSION = '0.2-beta'
+VERSION = '0.3-beta'
 ROOT = os.path.dirname(os.path.abspath(__file__))
 RESHADE_DIR = os.environ.get('RESHADE_DIR', r'E:\Dev\ghwt\reshade-6.8.0')
 

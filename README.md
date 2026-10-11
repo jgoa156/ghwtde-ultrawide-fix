@@ -1,10 +1,10 @@
-# GHWT:DE Ultrawide Fix (v0.2 beta)
+# GHWT:DE Ultrawide Fix (v0.3 beta)
 
 A ReShade add-on for **Guitar Hero World Tour: Definitive Edition** (32-bit, Direct3D 9) that draws the game's
 2D layer (HUD, menus, text) as the closest **16:9 picture, centred**, on ultrawide screens, instead of stretching
 it sideways. The 3D scene keeps the full width. By **WitchDoctoR**.
 
-**Beta, not a final build.** **Download:** [`releases/GHWTDE-Ultrawide-Fix_0.2-beta.zip`](releases/GHWTDE-Ultrawide-Fix_0.2-beta.zip). Install
+**Beta, not a final build.** **Download:** [`releases/GHWTDE-Ultrawide-Fix_0.3-beta.zip`](releases/GHWTDE-Ultrawide-Fix_0.3-beta.zip). Install
 instructions are in the zip's README.
 
 ## How it works
