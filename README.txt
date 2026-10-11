@@ -1,4 +1,4 @@
-GHWT:DE Ultrawide Fix  (v0.3 BETA)
+GHWT:DE Ultrawide Fix  (v1.0)
 =============================
 By WitchDoctoR
 
@@ -24,7 +24,7 @@ INSTALL (into the folder with GHWT_Definitive.exe)
 UNINSTALL
   Delete ghwtde_ultrawide.addon32 (and d3d9.dll if you copied it only for this).
 
-KNOWN LIMITS (v0.3 beta, not a final build)
+KNOWN LIMITS (v1.0)
   - Face-off / battle HUDs are not adjusted yet (centred 16:9).
   - Screens the add-on has no rule for stay a centred 16:9 picture (the 3D scene shows at the sides).
   - The per-element modes hook GHWT_Definitive.exe; on another game build they switch off (centring still works).
