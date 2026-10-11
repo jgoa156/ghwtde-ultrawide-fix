@@ -35,7 +35,8 @@ its screen element, ancestors and texture checksum. Rules then pick a mode per d
   group's mode. Loading screens are 16:9 with black side bars by default (`LoadingFill=1`: their movie, a
   `DrawPrimitiveUP` outside the sprite system, is covered through a hook on the device's `DrawPrimitiveUP`).
 
-Every new element is logged once to `ghwtde_ultrawide_catalog.txt` (ids, textures, rects) for writing new rules.
+With `Catalog=1` (off by default: it slows the game down with moving text), every new element is logged once to
+`ghwtde_ultrawide_catalog.txt` (ids, textures, rects) for writing new rules.
 
 ## Build
 

@@ -44,8 +44,9 @@ SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
   Element groups (hex element ids; the element and everything under it):
     Left=  Right=  Centre=  Bars=  (built in: select-mode paper 97dc36b4 + header 29aa72ea, instrument paper
                                    98fe6fdc, song intro 43823aca -> left; loading screen aed7cd2e -> bars;
-                                   YOU ROCK layouts a39d36f7, c5fe03f7, 427ea435
-                                   -> cover)
+                                   YOU ROCK layouts a39d36f7, c5fe03f7, 427ea435, the exploding text
+                                   6139b417 and its sparks 32cc87b4, the WoR HUD mod's YOU ROCK bolts
+                                   881079ee -> cover)
   Built in as well: song list side art 4b93dd1e / b19ce07d grow from the screen edges; title screen overlay
   f8d1f74f stretches.
   LoadingFill=0          1 = loading screens fill the width instead (the movie is scaled to cover the screen; the
@@ -54,7 +55,8 @@ SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
                          add-on's overlay.
   AutoAnchor=0           experimental: pin any panel whose art touches a screen edge
   AnchorInHud=0          allow pinning inside the gameplay HUD
-  Catalog=1              log every new element once to ghwtde_ultrawide_catalog.txt (ids, textures, rects)
+  Catalog=0              1 = developer log: every new element once to ghwtde_ultrawide_catalog.txt, plus one frame
+                         dump per movie screen (slows the game down with moving text; leave off)
   CompositePS=DE796938   (pixel shader hash of the game's scene composite; only change if a DE update breaks it)
   The overlay button "Dump this frame's 2D draws" (or Ctrl+Shift+U) appends the frame's UI draws to
   ghwtde_ultrawide_dump.txt next to the game exe.

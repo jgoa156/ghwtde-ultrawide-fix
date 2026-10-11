@@ -110,6 +110,9 @@ namespace
 		{ 0xa39d36f7, M_COVER },  // You_Rock: Metallica (you_rock_ghm) and Van Halen (you_rock_ghvh)
 		{ 0xc5fe03f7, M_COVER },  // YouRock: Smash Hits (you_rock_ghshits)
 		{ 0x427ea435, M_COVER },  // HandsOfGod: World Tour (you_rock)
+		{ 0x6139b417, M_COVER },  // you_rock_physics: the exploding YOU ROCK text's container (WoR theme's glow, explosion)
+		{ 0x32cc87b4, M_COVER },  // exploding_particle_container: the sparks around the exploding text
+		{ 0x881079ee, M_COVER },  // WoR_HUD_yourock_fx: GH5 / WoR HUD mod's WoR YOU ROCK lightning bolts
 	};
 	const std::pair<uint32_t, TexRule> kDefaultTex[] = {
 		{ 0x5049d8f2, { M_TILE, 0.58f, 1.0f, 0.04f } },   // title screen wall (logo baked in on the left half)
@@ -150,7 +153,7 @@ namespace
 	bool g_loading_fill = false;                     // loading screens: false = 16:9 with black side bars, true = fill the width
 	bool g_auto_anchor = false;
 	bool g_anchor_in_hud = false;
-	bool g_catalog_on = true;
+	bool g_catalog_on = false;                       // developer log (a line + flush per new element: stutters with moving text)
 	Mode g_full_image = M_COVER;                     // full-screen sprite with a large texture
 	Mode g_full_other = M_STRETCH;                   // other full-width sprites (gradients, dimmers, bands)
 	int g_min_image = 512;                           // texture size (both sides) that makes a full-screen sprite an image
@@ -963,7 +966,7 @@ namespace
 		apply_mode(dev, m, fw, w169);
 		if (bars && g_movie_covered_frame != frame_now)
 			clear_bars(dev, bw, bh, w169);              // no covered movie this frame: keep the sides black
-		if (g_cur_has_info && g_cur_info.dump_trigger)
+		if (g_catalog_on && g_cur_has_info && g_cur_info.dump_trigger)
 		{
 			// one dump per movie screen (loading, YOU ROCK; up to 4 a session), to see what draws the movie
 			const uint32_t now = g_frame.load();
