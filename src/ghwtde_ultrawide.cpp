@@ -1,4 +1,10 @@
-// ghwtde_ultrawide: ReShade add-on for Guitar Hero World Tour: Definitive Edition (32-bit, Direct3D 9).
+// ghwtde_ultrawide: ASI plugin for Guitar Hero World Tour: Definitive Edition (32-bit, Direct3D 9).
+//
+// 1.1: works on the game's own IDirect3DDevice9 (hooked when the game creates it), whichever d3d9.dll provides it:
+// Windows' Direct3D 9, ReShade's d3d9.dll or DXVK. Every hook runs on the game's render thread, in step with the
+// sprite / text draw hooks below (ReShade's draw events don't under DXVK: it records Vulkan work on its own thread),
+// so ReShade is no longer needed. Loaded by an ASI loader (dinput8.dll); settings in ghwtde_ultrawide.ini, log in
+// ghwtde_ultrawide.log.
 //
 // On a screen wider than 16:9 the game stretches its whole 2D layer (HUD, menus, text) sideways. This add-on draws
 // that layer as the closest 16:9 picture, centred (1920x1080 inside 2560x1080, for example), while the 3D scene
@@ -25,14 +31,14 @@
 // Every new element seen is appended once to ghwtde_ultrawide_catalog.txt (ids, texture checksums, rects), and the
 // overlay can dump one frame's 2D draws to ghwtde_ultrawide_dump.txt.
 //
-// Settings (ReShade.ini, section [GHWTDE_ULTRAWIDE]): see README.txt.
+// Settings (ghwtde_ultrawide.ini next to the game, section [GHWTDE_ULTRAWIDE]; ReShade.ini's section is read as a
+// fallback, as in 1.0): see README.txt.
 
-#define ImTextureID ImU64
-#include <imgui.h>
-#include <reshade.hpp>
+#include <windows.h>
 #include <d3d9.h>
 
 #include <atomic>
+#include <cstdarg>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -41,15 +47,28 @@
 #include <unordered_map>
 #include <unordered_set>
 
-using namespace reshade::api;
-
-extern "C" __declspec(dllexport) const char *NAME = "GHWT:DE Ultrawide Fix";
-extern "C" __declspec(dllexport) const char *DESCRIPTION =
-	"Draws the 2D layer (HUD, menus) of Guitar Hero World Tour: Definitive Edition as a centred 16:9 picture on "
-	"ultrawide screens; full-screen backgrounds fill the screen and side panels pin to the screen edges.";
-
 namespace
 {
+	char g_log_path[MAX_PATH] = {};
+
+	void log_msg(const char *fmt, ...)
+	{
+		if (g_log_path[0] == 0)
+			return;
+		FILE *f = nullptr;
+		if (fopen_s(&f, g_log_path, "a") != 0 || f == nullptr)
+			return;
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+		fprintf(f, "%02d:%02d:%02d ", st.wHour, st.wMinute, st.wSecond);
+		va_list a;
+		va_start(a, fmt);
+		vfprintf(f, fmt, a);
+		va_end(a);
+		fputc('\n', f);
+		fclose(f);
+	}
+
 	// ---- GHWT_Definitive.exe (image base 0x400000) ----
 	constexpr uintptr_t kVtSSprite = 0xa2ecd0;       // NxXenon::sSprite vtable: dtor, clone, -, begin, draw, end
 	constexpr uintptr_t kVtSText = 0xa30274;         // NxXenon::SText vtable, same layout
@@ -177,9 +196,10 @@ namespace
 		return h;
 	}
 
-	effect_runtime *g_runtime = nullptr;
 	uint32_t g_cur_ps = 0;
-	uint64_t g_cur_rt0 = 0;
+	void *g_cur_rt0 = nullptr;          // render target 0 the game set (surface pointer)
+	void *g_backbuffer = nullptr;       // the swap chain's back buffer (not AddRef'd; refreshed every Present)
+	uint32_t g_bw = 0, g_bh = 0;        // its size
 	bool g_ui_phase = false;           // the composite was drawn this frame: later back-buffer draws are UI
 	D3DVIEWPORT9 g_vp_game = {}, g_vp_set = {};   // the game's viewport / the one we last set
 	bool g_vp_ours = false;            // the device holds g_vp_set (else the game's own viewport)
@@ -231,16 +251,16 @@ namespace
 	bool g_draw_indexed = false;
 
 	// The loading screen's background is a movie drawn with DrawPrimitiveUP (4 vertices: float4 position, colour,
-	// float2 uv) that the add-on can't reach through ReShade's events. The real device's DrawPrimitiveUP is hooked:
+	// float2 uv) drawn outside the sprite / text objects. In the device's DrawPrimitiveUP hook (movie_up below),
 	// when map_ui flags that draw, its quad's height is scaled by the cover factor (its width already spans the
 	// screen, the draw gets the full viewport), so the movie fills the screen without distortion.
 	using DrawUpFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, const void *, UINT);
 	DrawUpFn g_up_orig = nullptr;
-	bool g_up_hooked = false, g_cover_up_pending = false, g_up_logged = false;
+	bool g_cover_up_pending = false, g_up_logged = false;
 	float g_cover_scale = 1;
 	uint32_t g_movie_screen_frame = 0x80000000u, g_movie_covered_frame = 0x80000000u;
 
-	HRESULT __stdcall movie_up_hook(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE type, UINT prims, const void *data, UINT stride)
+	HRESULT movie_up(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE type, UINT prims, const void *data, UINT stride)
 	{
 		if (g_cover_up_pending && data != nullptr && prims == 2 && stride >= 28 && stride <= 64)
 		{
@@ -267,24 +287,12 @@ namespace
 				char msg[220];
 				sprintf_s(msg, "ghwtde_ultrawide: movie quad covered (x %.1f..%.1f, y %.1f..%.1f, w %.2f, stride %u, scale %.3f)",
 					v[0], *reinterpret_cast<const float *>(static_cast<const uint8_t *>(data) + 2 * stride), miny, maxy, v[3], stride, g_cover_scale);
-				reshade::log::message(reshade::log::level::info, msg);
+				log_msg("%s", msg);
 			}
 			return g_up_orig(dev, type, prims, buf, stride);
 		}
 		g_cover_up_pending = false;
 		return g_up_orig(dev, type, prims, data, stride);
-	}
-
-	void hook_draw_up(IDirect3DDevice9 *dev)
-	{
-		g_up_hooked = true;
-		void **vt = *reinterpret_cast<void ***>(dev);
-		DWORD old = 0;
-		if (!VirtualProtect(&vt[83], sizeof(void *), PAGE_READWRITE, &old))
-			return;
-		g_up_orig = reinterpret_cast<DrawUpFn>(vt[83]);           // IDirect3DDevice9::DrawPrimitiveUP
-		vt[83] = reinterpret_cast<void *>(&movie_up_hook);
-		VirtualProtect(&vt[83], sizeof(void *), old, &old);
 	}
 
 	// the movie's vertex layout: float4 position at 0, D3DCOLOR at 16, float2 uv at 20
@@ -624,11 +632,6 @@ namespace
 	// D3D side
 	// =========================================================================================================
 
-	IDirect3DDevice9 *native(command_list *cmd_list)
-	{
-		return reinterpret_cast<IDirect3DDevice9 *>(cmd_list->get_device()->get_native());
-	}
-
 	struct SpriteGeom
 	{
 		uint8_t *v = nullptr;
@@ -872,18 +875,14 @@ namespace
 		++g_catalog_lines;
 	}
 
-	void map_ui(command_list *cmd_list)
+	void map_ui(IDirect3DDevice9 *dev)
 	{
-		if (!g_enabled || !g_ui_phase || g_runtime == nullptr || g_cur_rt0 != g_runtime->get_current_back_buffer().handle)
+		if (!g_enabled || !g_ui_phase || g_backbuffer == nullptr || g_cur_rt0 != g_backbuffer)
 			return;
-		uint32_t bw = 0, bh = 0;
-		g_runtime->get_screenshot_width_and_height(&bw, &bh);
+		const uint32_t bw = g_bw, bh = g_bh;
 		if (bh == 0 || bw * 9 <= bh * 16 + 9)
 			return;                                       // 16:9 or narrower
 		const float fw = static_cast<float>(bw), fh = static_cast<float>(bh), w169 = fh * 16.0f / 9.0f;
-		IDirect3DDevice9 *dev = native(cmd_list);
-		if (!g_up_hooked)
-			hook_draw_up(dev);
 		g_cover_up_pending = false;
 		g_cover_scale = fw / w169;
 
@@ -1071,63 +1070,8 @@ namespace
 			char msg[200];
 			sprintf_s(msg, "ghwtde_ultrawide: back buffer %ux%u, UI drawn at x %.0f, width %.0f; per-element modes: %s",
 				bw, bh, (fw - w169) * 0.5f, w169, g_hook_status.c_str());
-			reshade::log::message(reshade::log::level::info, msg);
+			log_msg("%s", msg);
 		}
-	}
-
-	void on_draw_common(command_list *cmd_list)
-	{
-		map_ui(cmd_list);
-		if (g_cur_ps == g_composite_ps && g_runtime != nullptr && g_cur_rt0 == g_runtime->get_current_back_buffer().handle)
-			g_ui_phase = true;                            // from the next draw on
-	}
-
-	bool on_draw(command_list *cmd_list, uint32_t vertices, uint32_t, uint32_t, uint32_t)
-	{
-		g_draw_vertices = vertices, g_draw_indexed = false;
-		on_draw_common(cmd_list);
-		return false;
-	}
-
-	bool on_draw_indexed(command_list *cmd_list, uint32_t indices, uint32_t, uint32_t, int32_t, uint32_t)
-	{
-		g_draw_vertices = indices, g_draw_indexed = true;
-		on_draw_common(cmd_list);
-		return false;
-	}
-
-	void on_init_pipeline(device *, pipeline_layout, uint32_t count, const pipeline_subobject *subobjects, pipeline handle)
-	{
-		std::lock_guard<std::mutex> lock(g_map_mutex);
-		for (uint32_t i = 0; i < count; ++i)
-		{
-			const pipeline_subobject &so = subobjects[i];
-			if (so.type == pipeline_subobject_type::pixel_shader && so.data != nullptr)
-			{
-				const auto *desc = static_cast<const shader_desc *>(so.data);
-				g_shader_hash[handle.handle] = desc->code != nullptr ? fnv1a(desc->code, desc->code_size) : 0;
-			}
-		}
-	}
-
-	void on_destroy_pipeline(device *, pipeline handle)
-	{
-		std::lock_guard<std::mutex> lock(g_map_mutex);
-		g_shader_hash.erase(handle.handle);
-	}
-
-	void on_bind_pipeline(command_list *, pipeline_stage stages, pipeline handle)
-	{
-		if ((stages & pipeline_stage::pixel_shader) != pipeline_stage::pixel_shader)
-			return;
-		std::lock_guard<std::mutex> lock(g_map_mutex);
-		const auto it = g_shader_hash.find(handle.handle);
-		g_cur_ps = it != g_shader_hash.end() ? it->second : 0;
-	}
-
-	void on_bind_render_targets(command_list *, uint32_t count, const resource_view *rtvs, resource_view)
-	{
-		g_cur_rt0 = count != 0 ? rtvs[0].handle : 0;
 	}
 
 	void prune(std::unordered_map<void *, uint32_t> &m, uint32_t now)
@@ -1136,7 +1080,7 @@ namespace
 			it = now - it->second > 600 ? m.erase(it) : std::next(it);
 	}
 
-	void on_present(command_queue *, swapchain *, const rect *, const rect *, uint32_t, const rect *)
+	void end_frame()
 	{
 		g_ui_phase = false;
 		g_vp_ours = false;
@@ -1150,7 +1094,7 @@ namespace
 		{
 			fclose(g_dump);
 			g_dump = nullptr;
-			reshade::log::message(reshade::log::level::info, "ghwtde_ultrawide: dumped one frame's 2D draws");
+			log_msg("dumped one frame's 2D draws");
 		}
 		const bool key = (GetAsyncKeyState(VK_CONTROL) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000) && (GetAsyncKeyState('U') & 0x8000);
 		if (key && !g_key_down)
@@ -1163,10 +1107,7 @@ namespace
 			{
 				SYSTEMTIME st;
 				GetLocalTime(&st);
-				uint32_t bw = 0, bh = 0;
-				if (g_runtime != nullptr)
-					g_runtime->get_screenshot_width_and_height(&bw, &bh);
-				fprintf(g_dump, "\n==== frame %u, %02d:%02d:%02d, %ux%u, hooks %s ====\n", now, st.wHour, st.wMinute, st.wSecond, bw, bh,
+				fprintf(g_dump, "\n==== frame %u, %02d:%02d:%02d, %ux%u, hooks %s ====\n", now, st.wHour, st.wMinute, st.wSecond, g_bw, g_bh,
 					g_hook_status.c_str());
 				g_dump_index = 0;
 			}
@@ -1182,7 +1123,37 @@ namespace
 		}
 	}
 
-	// ---- settings ----
+	// ---- settings (ghwtde_ultrawide.ini, else ReShade.ini's [GHWTDE_ULTRAWIDE] as in 1.0) ----
+	char g_ini[MAX_PATH] = {}, g_ini_reshade[MAX_PATH] = {};
+
+	bool read_string(const char *key, char *buf, size_t size)
+	{
+		for (const char *ini : { g_ini, g_ini_reshade })
+		{
+			if (ini[0] == 0)
+				continue;
+			GetPrivateProfileStringA("GHWTDE_ULTRAWIDE", key, "\x01", buf, static_cast<DWORD>(size), ini);
+			if (!(buf[0] == 1 && buf[1] == 0))
+				return true;
+		}
+		buf[0] = 0;
+		return false;
+	}
+
+	void read_bool(const char *key, bool &v)
+	{
+		char buf[16];
+		if (read_string(key, buf, sizeof buf))
+			v = atoi(buf) != 0;
+	}
+
+	void read_int(const char *key, int &v)
+	{
+		char buf[16];
+		if (read_string(key, buf, sizeof buf))
+			v = atoi(buf);
+	}
+
 	Mode parse_mode(const char *s, Mode fallback)
 	{
 		for (int i = 0; i < M_COUNT; ++i)
@@ -1191,17 +1162,11 @@ namespace
 		return fallback;
 	}
 
-	bool read_string(effect_runtime *runtime, const char *key, char *buf, size_t size)
-	{
-		size_t n = size;
-		return reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", key, buf, &n);
-	}
-
 	// "ID[:a:b], ID[:a:b], ..." (hex ids; a/b = band for slice / tile)
-	template <typename F> void for_each_item(effect_runtime *runtime, const char *key, F f)
+	template <typename F> void for_each_item(const char *key, F f)
 	{
 		char buf[4096] = {};
-		if (!read_string(runtime, key, buf, sizeof buf))
+		if (!read_string(key, buf, sizeof buf))
 			return;
 		for (char *ctx = nullptr, *tok = strtok_s(buf, ", ;", &ctx); tok != nullptr; tok = strtok_s(nullptr, ", ;", &ctx))
 		{
@@ -1222,9 +1187,9 @@ namespace
 		}
 	}
 
-	void read_tex(effect_runtime *runtime, const char *key, Mode m)
+	void read_tex(const char *key, Mode m)
 	{
-		for_each_item(runtime, key, [m](uint32_t id, float a, float b, float c) {
+		for_each_item(key, [m](uint32_t id, float a, float b, float c) {
 			TexRule r;
 			r.mode = m;
 			r.feather = c;
@@ -1236,32 +1201,31 @@ namespace
 		});
 	}
 
-	void read_ids(effect_runtime *runtime, const char *key, Mode m)
+	void read_ids(const char *key, Mode m)
 	{
-		for_each_item(runtime, key, [m](uint32_t id, float, float, float) { g_id_modes[id] = m; });
+		for_each_item(key, [m](uint32_t id, float, float, float) { g_id_modes[id] = m; });
 	}
 
-	void read_mode(effect_runtime *runtime, const char *key, Mode &m)
+	void read_mode(const char *key, Mode &m)
 	{
 		char buf[32] = {};
-		if (read_string(runtime, key, buf, sizeof buf))
+		if (read_string(key, buf, sizeof buf))
 			m = parse_mode(buf, m);
 	}
 
-	void on_init_effect_runtime(effect_runtime *runtime)
+	void load_settings()
 	{
-		g_runtime = runtime;
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "Enabled", g_enabled);
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "ElementModes", g_element_modes);
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "LoadingFill", g_loading_fill);
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "AutoAnchor", g_auto_anchor);
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "AnchorInHud", g_anchor_in_hud);
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "Catalog", g_catalog_on);
-		reshade::get_config_value(runtime, "GHWTDE_ULTRAWIDE", "MinImageSize", g_min_image);
-		read_mode(runtime, "FullScreenImages", g_full_image);
-		read_mode(runtime, "FullWidth", g_full_other);
+		read_bool("Enabled", g_enabled);
+		read_bool("ElementModes", g_element_modes);
+		read_bool("LoadingFill", g_loading_fill);
+		read_bool("AutoAnchor", g_auto_anchor);
+		read_bool("AnchorInHud", g_anchor_in_hud);
+		read_bool("Catalog", g_catalog_on);
+		read_int("MinImageSize", g_min_image);
+		read_mode("FullScreenImages", g_full_image);
+		read_mode("FullWidth", g_full_other);
 		char hex[16] = {};
-		if (read_string(runtime, "CompositePS", hex, sizeof hex))
+		if (read_string("CompositePS", hex, sizeof hex))
 			g_composite_ps = static_cast<uint32_t>(strtoul(hex, nullptr, 16));
 		g_tex_rules.clear();
 		g_id_modes.clear();
@@ -1276,77 +1240,313 @@ namespace
 			}
 		for (const auto &r : kDefaultIds)
 			g_id_modes[r.id] = r.mode;
-		read_tex(runtime, "Stretch", M_STRETCH);
-		read_tex(runtime, "Cover", M_COVER);
-		read_tex(runtime, "Slice", M_SLICE);
-		read_tex(runtime, "Tile", M_TILE);
-		read_tex(runtime, "Keep", M_KEEP);
-		read_ids(runtime, "Left", M_LEFT);
-		read_ids(runtime, "Right", M_RIGHT);
-		read_ids(runtime, "Centre", M_CENTRE);
-		read_ids(runtime, "Bars", M_BARS);
+		read_tex("Stretch", M_STRETCH);
+		read_tex("Cover", M_COVER);
+		read_tex("Slice", M_SLICE);
+		read_tex("Tile", M_TILE);
+		read_tex("Keep", M_KEEP);
+		read_ids("Left", M_LEFT);
+		read_ids("Right", M_RIGHT);
+		read_ids("Centre", M_CENTRE);
+		read_ids("Bars", M_BARS);
 	}
 
-	void on_destroy_effect_runtime(effect_runtime *runtime)
+	// =========================================================================================================
+	// Direct3D 9 hooks: the game's IDirect3DDevice9 (vtable slots), found through its Direct3DCreate9 import
+	// =========================================================================================================
+
+	constexpr int kCreateDevice = 16;                                   // IDirect3D9
+	constexpr int kReset = 16, kPresent = 17, kSetRenderTarget = 37,    // IDirect3DDevice9
+		kDrawPrimitive = 81, kDrawIndexedPrimitive = 82, kDrawPrimitiveUP = 83, kDrawIndexedPrimitiveUP = 84,
+		kCreatePixelShader = 106, kSetPixelShader = 107;
+	using Create9Fn = IDirect3D9 *(WINAPI *)(UINT);
+	using CreateDeviceFn = HRESULT(__stdcall *)(IDirect3D9 *, UINT, D3DDEVTYPE, HWND, DWORD, D3DPRESENT_PARAMETERS *, IDirect3DDevice9 **);
+	using ResetFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRESENT_PARAMETERS *);
+	using PresentFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, const RECT *, const RECT *, HWND, const RGNDATA *);
+	using SetRTFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, DWORD, IDirect3DSurface9 *);
+	using DPFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, UINT);
+	using DIPFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT);
+	using DIPUPFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, UINT, UINT, const void *, D3DFORMAT, const void *, UINT);
+	using CreatePSFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, const DWORD *, IDirect3DPixelShader9 **);
+	using SetPSFn = HRESULT(__stdcall *)(IDirect3DDevice9 *, IDirect3DPixelShader9 *);
+	Create9Fn g_create9 = nullptr;
+	CreateDeviceFn g_create_device = nullptr;
+	ResetFn g_reset = nullptr;
+	PresentFn g_present = nullptr;
+	SetRTFn g_set_rt = nullptr;
+	DPFn g_dp = nullptr;
+	DIPFn g_dip = nullptr;
+	DIPUPFn g_dipup = nullptr;
+	CreatePSFn g_create_ps = nullptr;
+	SetPSFn g_set_ps = nullptr;
+	void **g_d3d_vt = nullptr, **g_dev_vt = nullptr;
+	bool g_in_ours = false;               // map_ui's own draws (sliced / tiled pieces) pass straight through
+	bool g_composite_seen = false;
+	std::unordered_map<void *, uint32_t> g_ps_hash;   // pixel shader -> FNV-1a of its bytecode (render thread)
+
+	UINT prim_vertices(D3DPRIMITIVETYPE t, UINT n)
 	{
-		if (g_runtime == runtime)
-			g_runtime = nullptr;
+		switch (t)
+		{
+		case D3DPT_POINTLIST: return n;
+		case D3DPT_LINELIST: return n * 2;
+		case D3DPT_LINESTRIP: return n + 1;
+		case D3DPT_TRIANGLELIST: return n * 3;
+		case D3DPT_TRIANGLESTRIP: case D3DPT_TRIANGLEFAN: return n + 2;
+		default: return 0;
+		}
 	}
 
-	void draw_overlay(effect_runtime *runtime)
+	void refresh_backbuffer(IDirect3DDevice9 *dev)
 	{
-		if (ImGui::Checkbox("Draw the 2D layer as centred 16:9", &g_enabled))
-			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "Enabled", g_enabled);
-		if (ImGui::Checkbox("Per-element modes (backgrounds, side panels, loading bars)", &g_element_modes))
-			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "ElementModes", g_element_modes);
-		if (ImGui::Checkbox("Loading screens fill the width (crops top and bottom; off = 16:9 with black bars)", &g_loading_fill))
-			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "LoadingFill", g_loading_fill);
-		if (ImGui::Checkbox("Experimental: pin any panel touching a screen edge", &g_auto_anchor))
-			reshade::set_config_value(runtime, "GHWTDE_ULTRAWIDE", "AutoAnchor", g_auto_anchor);
-		ImGui::Text("Hooks: %s", g_hook_status.c_str());
-		ImGui::Text("UI draws last frame: %u (with element info %u, not centred %u)", g_mapped_last, g_known_last, g_special_last);
-		ImGui::Text("Catalog: %u elements logged", g_catalog_lines);
-		if (ImGui::Button("Dump this frame's 2D draws (Ctrl+Shift+U)"))
-			g_dump_request = true;
-		ImGui::TextUnformatted(g_dump_path);
+		IDirect3DSurface9 *s = nullptr;
+		g_backbuffer = nullptr;
+		if (SUCCEEDED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &s)) && s != nullptr)
+		{
+			D3DSURFACE_DESC d = {};
+			if (SUCCEEDED(s->GetDesc(&d)))
+				g_bw = d.Width, g_bh = d.Height;
+			g_backbuffer = s;
+			s->Release();                 // the swap chain keeps it alive; only compared, never used
+		}
+	}
+
+	void before_draw(IDirect3DDevice9 *dev, UINT vertices, bool indexed)
+	{
+		if (g_backbuffer == nullptr)
+			refresh_backbuffer(dev);
+		g_draw_vertices = vertices, g_draw_indexed = indexed;
+		g_in_ours = true;
+		map_ui(dev);
+		g_in_ours = false;
+		if (g_cur_ps == g_composite_ps && g_backbuffer != nullptr && g_cur_rt0 == g_backbuffer)
+		{
+			g_ui_phase = true;                // from the next draw on
+			if (!g_composite_seen)
+			{
+				g_composite_seen = true;
+				log_msg("scene composite found (pixel shader %08x): UI drawn after it is mapped", g_composite_ps);
+			}
+		}
+	}
+
+	HRESULT __stdcall dp_hook(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, UINT start, UINT n)
+	{
+		if (!g_in_ours)
+			before_draw(dev, prim_vertices(t, n), false);
+		return g_dp(dev, t, start, n);
+	}
+
+	HRESULT __stdcall dip_hook(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, INT base, UINT minv, UINT nv, UINT start, UINT n)
+	{
+		if (!g_in_ours)
+			before_draw(dev, prim_vertices(t, n), true);
+		return g_dip(dev, t, base, minv, nv, start, n);
+	}
+
+	HRESULT __stdcall dpup_hook(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, UINT n, const void *data, UINT stride)
+	{
+		if (g_in_ours)
+			return g_up_orig(dev, t, n, data, stride);
+		before_draw(dev, prim_vertices(t, n), false);
+		return movie_up(dev, t, n, data, stride);
+	}
+
+	HRESULT __stdcall dipup_hook(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, UINT minv, UINT nv, UINT n, const void *idx, D3DFORMAT fmt,
+	                             const void *data, UINT stride)
+	{
+		if (!g_in_ours)
+			before_draw(dev, prim_vertices(t, n), true);
+		return g_dipup(dev, t, minv, nv, n, idx, fmt, data, stride);
+	}
+
+	HRESULT __stdcall set_rt_hook(IDirect3DDevice9 *dev, DWORD index, IDirect3DSurface9 *s)
+	{
+		if (index == 0)
+			g_cur_rt0 = s;
+		return g_set_rt(dev, index, s);
+	}
+
+	// shader bytecode size: version token, instructions, end token (0x0000ffff)
+	size_t shader_size(const DWORD *code)
+	{
+		size_t n = 0;
+		__try
+		{
+			while (n < 65536 && code[n] != 0x0000ffff)
+				++n;
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			return 0;
+		}
+		return n < 65536 ? (n + 1) * sizeof(DWORD) : 0;
+	}
+
+	HRESULT __stdcall create_ps_hook(IDirect3DDevice9 *dev, const DWORD *code, IDirect3DPixelShader9 **out)
+	{
+		const HRESULT hr = g_create_ps(dev, code, out);
+		if (SUCCEEDED(hr) && out != nullptr && *out != nullptr && code != nullptr)
+		{
+			const size_t size = shader_size(code);
+			g_ps_hash[*out] = size ? fnv1a(code, size) : 0;
+		}
+		return hr;
+	}
+
+	HRESULT __stdcall set_ps_hook(IDirect3DDevice9 *dev, IDirect3DPixelShader9 *ps)
+	{
+		const auto it = g_ps_hash.find(ps);
+		g_cur_ps = it != g_ps_hash.end() ? it->second : 0;
+		return g_set_ps(dev, ps);
+	}
+
+	HRESULT __stdcall present_hook(IDirect3DDevice9 *dev, const RECT *src, const RECT *dst, HWND wnd, const RGNDATA *dirty)
+	{
+		const HRESULT hr = g_present(dev, src, dst, wnd, dirty);
+		refresh_backbuffer(dev);
+		g_cur_rt0 = g_backbuffer;             // a new frame starts on the back buffer
+		end_frame();
+		return hr;
+	}
+
+	HRESULT __stdcall reset_hook(IDirect3DDevice9 *dev, D3DPRESENT_PARAMETERS *pp)
+	{
+		g_backbuffer = g_cur_rt0 = nullptr;
+		const HRESULT hr = g_reset(dev, pp);
+		if (SUCCEEDED(hr))
+			refresh_backbuffer(dev);
+		return hr;
+	}
+
+	template <typename Fn> void hook_slot(void **vt, int slot, void *hook, Fn &orig)
+	{
+		DWORD old = 0;
+		if (!VirtualProtect(&vt[slot], sizeof(void *), PAGE_EXECUTE_READWRITE, &old))
+			return;
+		orig = reinterpret_cast<Fn>(vt[slot]);
+		vt[slot] = hook;
+		VirtualProtect(&vt[slot], sizeof(void *), old, &old);
+	}
+
+	void hook_device(IDirect3DDevice9 *dev)
+	{
+		void **vt = *reinterpret_cast<void ***>(dev);
+		if (vt == g_dev_vt)
+			return;                           // this device class is hooked already
+		if (g_dev_vt != nullptr)
+		{
+			log_msg("a second device class showed up: left alone");
+			return;
+		}
+		g_dev_vt = vt;
+		hook_slot(vt, kReset, reinterpret_cast<void *>(&reset_hook), g_reset);
+		hook_slot(vt, kPresent, reinterpret_cast<void *>(&present_hook), g_present);
+		hook_slot(vt, kSetRenderTarget, reinterpret_cast<void *>(&set_rt_hook), g_set_rt);
+		hook_slot(vt, kDrawPrimitive, reinterpret_cast<void *>(&dp_hook), g_dp);
+		hook_slot(vt, kDrawIndexedPrimitive, reinterpret_cast<void *>(&dip_hook), g_dip);
+		hook_slot(vt, kDrawPrimitiveUP, reinterpret_cast<void *>(&dpup_hook), g_up_orig);
+		hook_slot(vt, kDrawIndexedPrimitiveUP, reinterpret_cast<void *>(&dipup_hook), g_dipup);
+		hook_slot(vt, kCreatePixelShader, reinterpret_cast<void *>(&create_ps_hook), g_create_ps);
+		hook_slot(vt, kSetPixelShader, reinterpret_cast<void *>(&set_ps_hook), g_set_ps);
+		refresh_backbuffer(dev);
+		g_cur_rt0 = g_backbuffer;
+		log_msg("device hooked (back buffer %ux%u); per-element modes: %s", g_bw, g_bh, g_hook_status.c_str());
+	}
+
+	HRESULT __stdcall create_device_hook(IDirect3D9 *d3d, UINT adapter, D3DDEVTYPE type, HWND wnd, DWORD flags,
+	                                     D3DPRESENT_PARAMETERS *pp, IDirect3DDevice9 **out)
+	{
+		const HRESULT hr = g_create_device(d3d, adapter, type, wnd, flags, pp, out);
+		if (SUCCEEDED(hr) && out != nullptr && *out != nullptr)
+			hook_device(*out);
+		return hr;
+	}
+
+	IDirect3D9 *WINAPI create9_hook(UINT sdk)
+	{
+		IDirect3D9 *d = g_create9(sdk);
+		if (d != nullptr)
+		{
+			void **vt = *reinterpret_cast<void ***>(d);
+			if (g_d3d_vt == nullptr)
+			{
+				g_d3d_vt = vt;
+				hook_slot(vt, kCreateDevice, reinterpret_cast<void *>(&create_device_hook), g_create_device);
+			}
+		}
+		return d;
+	}
+
+	const char *d3d9_provider()
+	{
+		static char name[MAX_PATH];
+		HMODULE m = GetModuleHandleA("d3d9.dll");
+		if (m == nullptr || GetModuleFileNameA(m, name, MAX_PATH) == 0)
+			return "d3d9.dll not loaded yet";
+		return name;
+	}
+
+	// the game's import of d3d9!Direct3DCreate9 points at our hook
+	bool hook_import()
+	{
+		uint8_t *base = reinterpret_cast<uint8_t *>(GetModuleHandleW(nullptr));
+		auto *dos = reinterpret_cast<IMAGE_DOS_HEADER *>(base);
+		auto *nt = reinterpret_cast<IMAGE_NT_HEADERS *>(base + dos->e_lfanew);
+		const IMAGE_DATA_DIRECTORY &dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+		for (auto *imp = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR *>(base + dir.VirtualAddress); imp->Name != 0; ++imp)
+		{
+			if (_stricmp(reinterpret_cast<const char *>(base + imp->Name), "d3d9.dll") != 0)
+				continue;
+			auto *names = reinterpret_cast<IMAGE_THUNK_DATA *>(base + (imp->OriginalFirstThunk ? imp->OriginalFirstThunk : imp->FirstThunk));
+			auto *iat = reinterpret_cast<IMAGE_THUNK_DATA *>(base + imp->FirstThunk);
+			for (; names->u1.AddressOfData != 0; ++names, ++iat)
+			{
+				if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal))
+					continue;
+				const auto *by_name = reinterpret_cast<IMAGE_IMPORT_BY_NAME *>(base + names->u1.AddressOfData);
+				if (strcmp(reinterpret_cast<const char *>(by_name->Name), "Direct3DCreate9") != 0)
+					continue;
+				DWORD old = 0;
+				if (!VirtualProtect(&iat->u1.Function, sizeof(void *), PAGE_READWRITE, &old))
+					return false;
+				g_create9 = reinterpret_cast<Create9Fn>(iat->u1.Function);
+				iat->u1.Function = reinterpret_cast<uintptr_t>(&create9_hook);
+				VirtualProtect(&iat->u1.Function, sizeof(void *), old, &old);
+				return true;
+			}
+		}
+		return false;
 	}
 }
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 {
-	switch (reason)
+	if (reason == DLL_PROCESS_ATTACH)
 	{
-	case DLL_PROCESS_ATTACH:
-		if (!reshade::register_addon(module))
-			return FALSE;
+		DisableThreadLibraryCalls(module);
+		char exe[MAX_PATH] = {};
+		GetModuleFileNameA(nullptr, exe, MAX_PATH);
+		char *slash = strrchr(exe, '\\');
+		if (slash != nullptr)
 		{
-			char exe[MAX_PATH] = {};
-			GetModuleFileNameA(nullptr, exe, MAX_PATH);
-			char *slash = strrchr(exe, '\\');
-			if (slash != nullptr)
-			{
-				slash[1] = 0;
-				sprintf_s(g_dump_path, "%sghwtde_ultrawide_dump.txt", exe);
-				sprintf_s(g_catalog_path, "%sghwtde_ultrawide_catalog.txt", exe);
-			}
+			slash[1] = 0;
+			sprintf_s(g_dump_path, "%sghwtde_ultrawide_dump.txt", exe);
+			sprintf_s(g_catalog_path, "%sghwtde_ultrawide_catalog.txt", exe);
+			sprintf_s(g_log_path, "%sghwtde_ultrawide.log", exe);
+			sprintf_s(g_ini, "%sghwtde_ultrawide.ini", exe);
+			sprintf_s(g_ini_reshade, "%sReShade.ini", exe);
+			FILE *f = nullptr;
+			if (fopen_s(&f, g_log_path, "w") == 0 && f != nullptr)
+				fclose(f);                    // a fresh log every start
 		}
+		load_settings();
 		install_game_hooks();
-		reshade::register_event<reshade::addon_event::init_pipeline>(on_init_pipeline);
-		reshade::register_event<reshade::addon_event::destroy_pipeline>(on_destroy_pipeline);
-		reshade::register_event<reshade::addon_event::bind_pipeline>(on_bind_pipeline);
-		reshade::register_event<reshade::addon_event::bind_render_targets_and_depth_stencil>(on_bind_render_targets);
-		reshade::register_event<reshade::addon_event::draw>(on_draw);
-		reshade::register_event<reshade::addon_event::draw_indexed>(on_draw_indexed);
-		reshade::register_event<reshade::addon_event::present>(on_present);
-		reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
-		reshade::register_event<reshade::addon_event::destroy_effect_runtime>(on_destroy_effect_runtime);
-		reshade::register_overlay(nullptr, draw_overlay);
-		break;
-	case DLL_PROCESS_DETACH:
-		if (g_catalog != nullptr)
-			fclose(g_catalog);
-		reshade::unregister_addon(module);
-		break;
+		const bool ok = hook_import();
+		log_msg("GHWT:DE Ultrawide Fix 1.1: %s (d3d9: %s); per-element modes: %s", ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found",
+			d3d9_provider(), g_hook_status.c_str());
 	}
+	else if (reason == DLL_PROCESS_DETACH && g_catalog != nullptr)
+		fclose(g_catalog);
 	return TRUE;
 }
