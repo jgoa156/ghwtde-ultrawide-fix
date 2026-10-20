@@ -1,11 +1,26 @@
-# GHWT:DE Ultrawide Fix (v1.0)
+# GHWT:DE Ultrawide Fix (v1.1)
 
-A ReShade add-on for **Guitar Hero World Tour: Definitive Edition** (32-bit, Direct3D 9) that draws the game's
-2D layer (HUD, menus, text) as the closest **16:9 picture, centred**, on ultrawide screens, instead of stretching
-it sideways. The 3D scene keeps the full width. By **WitchDoctoR**.
+An ASI plugin for **Guitar Hero World Tour: Definitive Edition** (32-bit, Direct3D 9) for screens wider than 16:9.
+By **WitchDoctoR**.
 
-**Download:** [`releases/GHWTDE-Ultrawide-Fix_1.0.zip`](releases/GHWTDE-Ultrawide-Fix_1.0.zip). Install
-instructions are in the zip's README.
+- **3D (Hor+, 1.1):** the game keeps 16:9's horizontal field of view and crops the top and bottom on wider screens
+  (the highway, band and venue look zoomed in and the highway runs off the bottom). The plugin keeps 16:9's vertical
+  field of view instead and shows more at the sides, so the highway is its 16:9 size and lines up with the HUD.
+- **2D:** the HUD, menus and text are drawn as the closest **16:9 picture, centred**, instead of stretched sideways.
+- **No ReShade needed (1.1):** it hooks the game's own Direct3D 9 device, so it works with any ReShade version or
+  preset (or none), GShade and DXVK. Loaded by an ASI loader (included).
+
+**Download:** [`releases/GHWTDE-Ultrawide-Fix_1.1.zip`](releases/GHWTDE-Ultrawide-Fix_1.1.zip) or the
+[Releases page](https://github.com/jgoa156/ghwtde-ultrawide-fix/releases/latest). Install instructions are in the
+zip's README. Updating from 1.0: delete `ghwtde_ultrawide.addon32`.
+
+## 3D field of view (1.1)
+
+The engine builds its perspective frustums (camera projection `0x70d910`, a second one at `0x710b80`) as
+`width = 2 near tan(fov/2)`, `height = width / aspect`. Each `tan()` call is redirected to a thunk that scales the
+result by `aspect / (16/9)` on viewports wider than 16:9 (`HorPlus=1`; the call sites are byte-checked, so another
+game build leaves them alone). The 2D hooks go in at `Direct3DCreate9`, after every ASI plugin has started, so the
+GH5 / WoR HUD plugin still finds the original code it checks.
 
 ## How it works
 
@@ -35,16 +50,15 @@ its screen element, ancestors and texture checksum. Rules then pick a mode per d
   group's mode. Loading screens are 16:9 with black side bars by default (`LoadingFill=1`: their movie, a
   `DrawPrimitiveUP` outside the sprite system, is covered through a hook on the device's `DrawPrimitiveUP`).
 
-With `Catalog=1` (off by default: it slows the game down with moving text), every new element is logged once to
+With `Catalog=1` (in `ghwtde_ultrawide.ini`) (off by default: it slows the game down with moving text), every new element is logged once to
 `ghwtde_ultrawide_catalog.txt` (ids, textures, rects) for writing new rules.
 
 ## Build
 
-Needs Visual Studio 2022+ (C++ x86 tools, Windows SDK). Headers are vendored under `deps/`: the ReShade 6.x API
-(`deps/reshade/include`, BSD-3) and Dear ImGui 1.92.5 (`deps/imgui`, MIT).
+Needs Visual Studio 2022+ (C++ x86 tools, Windows SDK).
 
 ```
-build.bat          -> build\ghwtde_ultrawide.addon32
+build.bat          -> build\ghwtde_ultrawide.asi
 python package.py  -> dist\ and releases\GHWTDE-Ultrawide-Fix_<version>.zip
 ```
 
