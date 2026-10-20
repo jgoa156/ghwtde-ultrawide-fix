@@ -628,6 +628,111 @@ namespace
 		g_hook_status = g_text_flush ? "installed" : "installed (text flush not found: text follows its group only per batch)";
 	}
 
+	// ---- 3D field of view (1.1): Hor+ ----
+	// The engine builds its perspective frustums (camera projection 0x70d910, a second one at 0x710b80) as
+	// width = 2 near tan(fov / 2), height = width / aspect: the horizontal FOV is fixed, so a screen wider than 16:9
+	// loses picture at the top and bottom (the highway, the band and the venue look zoomed in, the highway runs off the
+	// bottom of the screen and no longer matches the 16:9 HUD). Each tan() call is redirected to a thunk that scales its
+	// result by aspect / (16/9) on viewports wider than 16:9: 16:9's vertical FOV is kept and the sides show more.
+	constexpr uintptr_t kTanThunk = 0x7be1c4;                  // jmp MSVCR80!_CItan (x87: argument and result in st0)
+	constexpr uintptr_t kTanCamera = 0x70dd00, kTanCamera2 = 0x710e5c;
+	// fld [esp+14h] / call tan / fstp [esp+14h] / fld [esp+14h] / movss xmm1, [esp+20h] (the aspect)
+	const uint8_t kTanCameraBytes[] = { 0xd9, 0x44, 0x24, 0x14, 0xe8, 0xbf, 0x04, 0x0b, 0x00, 0xd9, 0x5c, 0x24, 0x14,
+	                                    0xd9, 0x44, 0x24, 0x14, 0xf3, 0x0f, 0x10, 0x4c, 0x24, 0x20 };
+	// fld [esp+0Ch] / call tan / fstp [esp+0Ch] / fld [esp+0Ch] / cvtss2sd xmm1, [ebp+14h] (the aspect)
+	const uint8_t kTanCamera2Bytes[] = { 0xd9, 0x44, 0x24, 0x0c, 0xe8, 0x63, 0xd3, 0x0a, 0x00, 0xd9, 0x5c, 0x24, 0x0c,
+	                                     0xd9, 0x44, 0x24, 0x0c, 0xf3, 0x0f, 0x5a, 0x4d, 0x14 };
+	bool g_hor_plus = true;
+	std::string g_fov_status = "not installed";
+	float g_fov_seen[8] = {};
+	std::atomic<int> g_fov_seen_n{0};
+
+	float __cdecl hor_factor(float aspect)
+	{
+		constexpr float k169 = 16.0f / 9.0f;
+		const bool wide = g_hor_plus && aspect > k169 * 1.001f && aspect < 10.0f;
+		const int n = g_fov_seen_n.load();
+		if (n < 8)
+		{
+			bool seen = false;
+			for (int i = 0; i < n && !seen; ++i)
+				seen = std::fabs(g_fov_seen[i] - aspect) < 0.001f;
+			if (!seen)
+			{
+				g_fov_seen[n] = aspect;
+				g_fov_seen_n = n + 1;
+				log_msg("3D projection aspect %.4f: %s", aspect, wide ? "Hor+ (16:9 vertical FOV)" : "unchanged");
+			}
+		}
+		return wide ? aspect / k169 : 1.0f;
+	}
+
+	__declspec(naked) void tan_camera_thunk()
+	{
+		__asm
+		{
+			mov eax, 7BE1C4h               // kTanThunk
+			call eax                       // st0 = tan(fov / 2)
+			sub esp, 4
+			fstp dword ptr [esp]
+			push dword ptr [esp + 28h]     // the caller's [esp+20h]: + return address + our slot
+			call hor_factor
+			add esp, 4
+			fmul dword ptr [esp]
+			add esp, 4
+			ret
+		}
+	}
+
+	__declspec(naked) void tan_camera2_thunk()
+	{
+		__asm
+		{
+			mov eax, 7BE1C4h               // kTanThunk
+			call eax
+			sub esp, 4
+			fstp dword ptr [esp]
+			push dword ptr [ebp + 14h]
+			call hor_factor
+			add esp, 4
+			fmul dword ptr [esp]
+			add esp, 4
+			ret
+		}
+	}
+
+	// the call at `call_site` (5 bytes, inside `expect` starting 4 bytes earlier) goes to `target`
+	bool redirect_call(uintptr_t call_site, const uint8_t *expect, size_t len, void *target)
+	{
+		if (memcmp(reinterpret_cast<const void *>(call_site - 4), expect, len) != 0)
+			return false;
+		DWORD old = 0;
+		if (!VirtualProtect(reinterpret_cast<void *>(call_site), 5, PAGE_EXECUTE_READWRITE, &old))
+			return false;
+		*reinterpret_cast<int32_t *>(call_site + 1) = static_cast<int32_t>(reinterpret_cast<uintptr_t>(target) - (call_site + 5));
+		VirtualProtect(reinterpret_cast<void *>(call_site), 5, old, &old);
+		FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void *>(call_site), 5);
+		return true;
+	}
+
+	void install_fov_hooks()
+	{
+		if (!g_hor_plus)
+		{
+			g_fov_status = "off (HorPlus=0)";
+			return;
+		}
+		if (reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)) != 0x400000)
+		{
+			g_fov_status = "not GHWT_Definitive.exe: off";
+			return;
+		}
+		const bool a = redirect_call(kTanCamera, kTanCameraBytes, sizeof kTanCameraBytes, reinterpret_cast<void *>(&tan_camera_thunk));
+		const bool b = redirect_call(kTanCamera2, kTanCamera2Bytes, sizeof kTanCamera2Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
+		g_fov_status = a && b ? "Hor+ installed" : a ? "Hor+ on the camera only (second projection not found)" :
+			b ? "Hor+ on the second projection only (camera projection not found)" : "unexpected game build: Hor+ off";
+	}
+
 	// =========================================================================================================
 	// D3D side
 	// =========================================================================================================
@@ -1221,6 +1326,7 @@ namespace
 		read_bool("AutoAnchor", g_auto_anchor);
 		read_bool("AnchorInHud", g_anchor_in_hud);
 		read_bool("Catalog", g_catalog_on);
+		read_bool("HorPlus", g_hor_plus);
 		read_int("MinImageSize", g_min_image);
 		read_mode("FullScreenImages", g_full_image);
 		read_mode("FullWidth", g_full_other);
@@ -1541,10 +1647,22 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 				fclose(f);                    // a fresh log every start
 		}
 		load_settings();
+		install_fov_hooks();
+		// 1.0 was a ReShade add-on: with it still in the folder both would map the 2D layer (and hook the same draw
+		// methods), so the 2D part stays off until it is deleted; the 3D field of view is ours alone either way
+		char old_addon[MAX_PATH] = {};
+		if (slash != nullptr)
+			sprintf_s(old_addon, "%sghwtde_ultrawide.addon32", exe);
+		if (old_addon[0] != 0 && GetFileAttributesA(old_addon) != INVALID_FILE_ATTRIBUTES)
+		{
+			log_msg("GHWT:DE Ultrawide Fix 1.1: 3D FOV %s; 2D layer OFF: delete the old ghwtde_ultrawide.addon32 (1.0) from the game folder",
+				g_fov_status.c_str());
+			return TRUE;
+		}
 		install_game_hooks();
 		const bool ok = hook_import();
-		log_msg("GHWT:DE Ultrawide Fix 1.1: %s (d3d9: %s); per-element modes: %s", ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found",
-			d3d9_provider(), g_hook_status.c_str());
+		log_msg("GHWT:DE Ultrawide Fix 1.1: %s (d3d9: %s); 3D FOV: %s; per-element modes: %s",
+			ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found", d3d9_provider(), g_fov_status.c_str(), g_hook_status.c_str());
 	}
 	else if (reason == DLL_PROCESS_DETACH && g_catalog != nullptr)
 		fclose(g_catalog);

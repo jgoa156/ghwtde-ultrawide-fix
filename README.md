@@ -52,6 +52,6 @@ python package.py  -> dist\ and releases\GHWTDE-Ultrawide-Fix_<version>.zip
 
 - Face-off / battle HUDs are not adjusted yet.
 - Screens without a rule stay a centred 16:9 picture.
-- Also bundled with the GH5 / WoR HUD mod (optional ReShade folder).
+- Also bundled with the GH5 / WoR HUD mod.
 
 Related: [GH5 / WoR HUD mod](https://github.com/jgoa156/ghwtde-gh5wor-hud-mod).

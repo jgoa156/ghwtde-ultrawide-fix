@@ -1,10 +1,17 @@
-GHWT:DE Ultrawide Fix  (v1.0)
+GHWT:DE Ultrawide Fix  (v1.1)
 =============================
 By WitchDoctoR
 
 On screens wider than 16:9 (2560x1080, 3440x1440, ...) Guitar Hero World Tour: Definitive Edition stretches its
-whole 2D layer sideways: HUD, menus, text. This ReShade add-on draws that layer as the closest 16:9 picture, centred
-(1920x1080 inside 2560x1080), unstretched. The 3D scene (venue, band, highway) keeps the full width.
+whole 2D layer sideways (HUD, menus, text) and zooms the 3D view in: it keeps 16:9's horizontal field of view and
+cuts picture off at the top and bottom, so the highway runs off the bottom of the screen and no longer lines up with
+the HUD. This plugin fixes both:
+  - 3D (v1.1): the venue, band and highway keep 16:9's vertical field of view and show more at the sides (Hor+):
+    the highway is the same size as on a 16:9 screen and sits right next to the HUD again.
+  - 2D: the HUD, menus and text are drawn as the closest 16:9 picture, centred (1920x1080 inside 2560x1080).
+
+v1.1 is an ASI plugin and no longer needs ReShade: it works with any ReShade version or preset (or none), GShade,
+DXVK and other effect packages, since it hooks the game itself instead of running inside ReShade.
 
 Per screen (v0.2): full-screen gradients and dimmers stretch to the full width; full-screen backgrounds fill the
 screen without distortion (title screen wall, song list side art, every YOU ROCK theme); loading screens are a
@@ -13,25 +20,29 @@ their text. Everything else stays a centred 16:9 picture. Also bundled with the 
 
 REQUIREMENTS
   - Guitar Hero World Tour: Definitive Edition.
-  - ReShade 6.x, 32-bit, Direct3D 9 (with add-on support). A copy is included (see below).
+  - An ASI loader (Ultimate ASI Loader, included as dinput8.dll). The GH5 / WoR HUD mod already installs it.
 
 INSTALL (into the folder with GHWT_Definitive.exe)
-  1. Copy ghwtde_ultrawide.addon32 next to GHWT_Definitive.exe.
-  2. No ReShade yet? Also copy d3d9.dll from "ReShade (only if you do not have it)".
-  In game, the ReShade overlay (Home key) > Add-ons tab shows "GHWT:DE Ultrawide Fix" with an on/off checkbox and
-  the number of UI draws it adjusted in the last frame.
+  1. Copy ghwtde_ultrawide.asi and ghwtde_ultrawide.ini next to GHWT_Definitive.exe.
+  2. No dinput8.dll there yet? Also copy dinput8.dll from "ASI Loader (only if you do not have it)".
+  3. Updating from v1.0: DELETE ghwtde_ultrawide.addon32 from the game folder. While it is there v1.1 leaves the
+     2D layer to it (only the 3D fix is applied) and says so in ghwtde_ultrawide.log.
+  ghwtde_ultrawide.log (next to the game exe) shows what was hooked and the 3D aspect it adjusted.
 
 UNINSTALL
-  Delete ghwtde_ultrawide.addon32 (and d3d9.dll if you copied it only for this).
+  Delete ghwtde_ultrawide.asi and ghwtde_ultrawide.ini (and dinput8.dll if you copied it only for this).
 
-KNOWN LIMITS (v1.0)
+KNOWN LIMITS (v1.1)
   - Face-off / battle HUDs are not adjusted yet (centred 16:9).
-  - Screens the add-on has no rule for stay a centred 16:9 picture (the 3D scene shows at the sides).
-  - The per-element modes hook GHWT_Definitive.exe; on another game build they switch off (centring still works).
-  - At 16:9 or narrower the add-on does nothing.
+  - Screens the plugin has no rule for stay a centred 16:9 picture (the 3D scene shows at the sides).
+  - The per-element modes and the 3D fix hook GHWT_Definitive.exe; on another game build they switch off
+    (centring still works) and the log says so.
+  - At 16:9 or narrower the plugin does nothing.
 
-SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
-  Enabled=1
+SETTINGS (ghwtde_ultrawide.ini, section [GHWTDE_ULTRAWIDE]; all optional. A [GHWTDE_ULTRAWIDE] section left in
+ReShade.ini by v1.0 is still read for keys the ini does not set)
+  HorPlus=1              3D view keeps 16:9's vertical field of view on wider screens (0 = the game's zoomed view)
+  Enabled=1              2D layer as a centred 16:9 picture
   ElementModes=1         per-element modes below (0 = everything centred, as in v0.1)
   FullScreenImages=cover full-screen sprites with a large texture (backgrounds): cover | stretch | keep
   FullWidth=stretch      other full-width sprites (gradients, vignettes, dimmers)
@@ -52,14 +63,13 @@ SETTINGS (ReShade.ini, section [GHWTDE_ULTRAWIDE]; all optional)
   f8d1f74f stretches.
   LoadingFill=0          1 = loading screens fill the width instead (the movie is scaled to cover the screen; the
                          GH5 / WoR HUD mod's Warriors of Rock loading picture 468df16a, wheel and plate frames cover
-                         it at 16:9, anchored so the ring and the LOADING plate stay whole). Also a checkbox in the
-                         add-on's overlay.
+                         it at 16:9, anchored so the ring and the LOADING plate stay whole). 
   AutoAnchor=0           experimental: pin any panel whose art touches a screen edge
   AnchorInHud=0          allow pinning inside the gameplay HUD
   Catalog=0              1 = developer log: every new element once to ghwtde_ultrawide_catalog.txt, plus one frame
                          dump per movie screen (slows the game down with moving text; leave off)
   CompositePS=DE796938   (pixel shader hash of the game's scene composite; only change if a DE update breaks it)
-  The overlay button "Dump this frame's 2D draws" (or Ctrl+Shift+U) appends the frame's UI draws to
+  Ctrl+Shift+U appends the frame's UI draws to
   ghwtde_ultrawide_dump.txt next to the game exe.
 CREDITS
-  ReShade by crosire (BSD-3-Clause, license included). Dear ImGui by Omar Cornut (MIT).
+  Ultimate ASI Loader by ThirteenAG (MIT). v1.0 was built on the ReShade add-on API by crosire (BSD-3-Clause).
