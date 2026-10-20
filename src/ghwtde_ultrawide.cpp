@@ -1571,6 +1571,17 @@ namespace
 
 	IDirect3D9 *WINAPI create9_hook(UINT sdk)
 	{
+		// The 2D hooks go in here, not in DllMain: by now every ASI plugin has started, and the GH5 / WoR HUD
+		// plugin checks the original bytes of the transform update (0x5a05e0) at its start and stays inert if they
+		// changed (the ASI loader starts ghwtde_ultrawide.asi first). 1.0 hooked at the same point, as a ReShade
+		// add-on loaded with the Direct3D runtime.
+		static bool game_hooks = false;
+		if (!game_hooks)
+		{
+			game_hooks = true;
+			install_game_hooks();
+			log_msg("game hooks at Direct3DCreate9: per-element modes %s", g_hook_status.c_str());
+		}
 		IDirect3D9 *d = g_create9(sdk);
 		if (d != nullptr)
 		{
@@ -1659,10 +1670,9 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 				g_fov_status.c_str());
 			return TRUE;
 		}
-		install_game_hooks();
 		const bool ok = hook_import();
-		log_msg("GHWT:DE Ultrawide Fix 1.1: %s (d3d9: %s); 3D FOV: %s; per-element modes: %s",
-			ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found", d3d9_provider(), g_fov_status.c_str(), g_hook_status.c_str());
+		log_msg("GHWT:DE Ultrawide Fix 1.1: %s (d3d9: %s); 3D FOV: %s", ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found",
+			d3d9_provider(), g_fov_status.c_str());
 	}
 	else if (reason == DLL_PROCESS_DETACH && g_catalog != nullptr)
 		fclose(g_catalog);
