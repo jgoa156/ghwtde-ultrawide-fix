@@ -1,0 +1,86 @@
+NEXUS MODS PAGE - GHWT:DE Ultrawide Fix 1.1
+============================================
+
+MOD NAME
+GHWT:DE Ultrawide Fix
+
+VERSION
+1.1
+
+CATEGORY (suggested)
+Utilities / Visuals (whichever the game page offers for display / UI fixes)
+
+AUTHOR
+WitchDoctoR
+
+BRIEF OVERVIEW (summary field, under 350 characters)
+Proper ultrawide support for Guitar Hero World Tour: Definitive Edition. The gameplay is no longer zoomed in (the 3D view keeps 16:9's height and shows more at the sides), and the HUD, menus and text are drawn unstretched as a centred 16:9 picture. ASI plugin: works with any ReShade preset, GShade, DXVK or no ReShade.
+
+FILE (main file)
+  File name:    GHWT:DE Ultrawide Fix 1.1
+  Upload:       GHWTDE-Ultrawide-Fix_1.1.zip
+  Description:  ASI plugin + settings ini, with the Ultimate ASI Loader (only needed if you don't have a dinput8.dll yet).
+
+DETAILED DESCRIPTION (BBCode)
+---8<---
+[size=5][b]GHWT:DE Ultrawide Fix[/b][/size]
+For [b]Guitar Hero World Tour: Definitive Edition[/b] on screens wider than 16:9 (2560x1080, 3440x1440, 5120x1440, ...).
+
+On an ultrawide screen the game stretches its whole HUD and menus sideways and [b]zooms the gameplay in[/b]: it keeps 16:9's horizontal field of view and cuts picture off at the top and bottom, so the highway runs off the bottom of the screen and no longer lines up with the HUD. This mod fixes both.
+
+[size=4][b]What it does[/b][/size]
+[list]
+[*][b]3D view (new in 1.1):[/b] the venue, band and highway keep 16:9's vertical field of view and show more at the sides. The highway is the same size as on a 16:9 screen and sits right next to the HUD again.
+[*][b]HUD, menus and text:[/b] drawn as the closest 16:9 picture, centred (1920x1080 inside 2560x1080), unstretched.
+[*][b]Per screen:[/b] full-screen backgrounds fill the screen without distortion (title screen, song list, every YOU ROCK theme), gradients and dimmers span the full width, side panels (mode select, instrument select, song intro) pin to the screen's left edge, loading screens are 16:9 with black bars (or fill the width, LoadingFill=1).
+[*]Nothing changes at 16:9 or narrower.
+[/list]
+
+[size=4][b]Works with your setup[/b][/size]
+Since 1.1 it is an [b]ASI plugin[/b], not a ReShade add-on: it no longer needs the add-on build of ReShade and works with your own ReShade (any version, any preset), GShade, DXVK, other effect packages, or no ReShade at all.
+
+[size=4][b]Install[/b][/size]
+[list=1]
+[*]Copy [b]ghwtde_ultrawide.asi[/b] and [b]ghwtde_ultrawide.ini[/b] into the game folder (the one with GHWT_Definitive.exe).
+[*]No [b]dinput8.dll[/b] in the game folder yet? Also copy the one from "ASI Loader (only if you do not have it)".
+[*][b]Updating from 1.0:[/b] delete [b]ghwtde_ultrawide.addon32[/b] from the game folder.
+[/list]
+ghwtde_ultrawide.log (next to the game exe) shows what the plugin hooked.
+
+[size=4][b]Settings[/b][/size] (ghwtde_ultrawide.ini, all optional)
+[list]
+[*][b]HorPlus=1[/b] - 3D view at 16:9's vertical field of view (0 = the game's zoomed view)
+[*][b]Enabled=1[/b] - HUD and menus as a centred 16:9 picture
+[*][b]LoadingFill=0[/b] - loading screens: 0 = 16:9 with black bars, 1 = fill the width
+[/list]
+Every other key is listed in the included README.
+
+[size=4][b]Uninstall[/b][/size]
+Delete ghwtde_ultrawide.asi and ghwtde_ultrawide.ini (and dinput8.dll if you copied it only for this).
+
+[size=4][b]Known limits[/b][/size]
+[list]
+[*]Face-off and battle HUDs are not adjusted yet (they stay a centred 16:9 picture).
+[*]The plugin hooks GHWT_Definitive.exe; on another game build its hooks switch themselves off and the log says so.
+[/list]
+
+Also bundled with the [b]GH5 / Warriors of Rock HUD[/b] mod. Source: [url=https://github.com/jgoa156/ghwtde-ultrawide-fix]github.com/jgoa156/ghwtde-ultrawide-fix[/url]
+
+[size=4][b]Credits[/b][/size]
+Ultimate ASI Loader by ThirteenAG (MIT).
+---8<---
+
+CHANGELOG
+1.1
+- Gameplay no longer zoomed in on ultrawide: the 3D view keeps 16:9's vertical field of view (Hor+).
+- ASI plugin instead of a ReShade add-on: works with any ReShade preset, GShade, DXVK or no ReShade.
+- Settings move to ghwtde_ultrawide.ini.
+1.0
+- HUD, menus and text as a centred 16:9 picture with per-screen modes (backgrounds, side panels, loading screens,
+  YOU ROCK screens).
+
+REQUIREMENTS (Nexus "requirements" section)
+- None. (The ASI loader is included.)
+
+PERMISSIONS (suggested, your call)
+- Upload to other sites: ask first. Modify / convert: yes with credit. Use assets in other mods: yes with credit.
