@@ -642,6 +642,23 @@ namespace
 	// fld [esp+0Ch] / call tan / fstp [esp+0Ch] / fld [esp+0Ch] / cvtss2sd xmm1, [ebp+14h] (the aspect)
 	const uint8_t kTanCamera2Bytes[] = { 0xd9, 0x44, 0x24, 0x0c, 0xe8, 0x63, 0xd3, 0x0a, 0x00, 0xd9, 0x5c, 0x24, 0x0c,
 	                                     0xd9, 0x44, 0x24, 0x0c, 0xf3, 0x0f, 0x5a, 0x4d, 0x14 };
+	// 1.2 (user 2026-10-27: "the ultrawide fix never really fixed the zoomed in band members"): three more projections
+	// built the same way (tan(fov / 2) -> width, height = width / aspect), all with 16:9's vertical FOV now:
+	// 0x7118d0 (a twin of 0x710b80, aspect at [ebp+14h]), 0x70d490 (4 callers, aspect float at [ebp+14h]) and 0x64aca0
+	// (aspect = viewport width / height, [esp+20h] / [esp+24h])
+	constexpr uintptr_t kTanCamera3 = 0x711bac, kTanCamera4 = 0x70d6dd, kTanCamera5 = 0x64ae7d;
+	const uint8_t kTanCamera3Bytes[] = { 0xd9, 0x44, 0x24, 0x0c, 0xe8, 0x13, 0xc6, 0x0a, 0x00, 0xd9, 0x5c, 0x24, 0x0c,
+	                                     0xd9, 0x44, 0x24, 0x0c, 0xf3, 0x0f, 0x5a, 0x4d, 0x14 };
+	// fld [esp+14h] / call tan / fstp [esp+14h] / mov eax, [esi+100h] / fld [esp+14h] / mov esi, [esi+0fch] /
+	// fld [esp+0ch] / movss xmm1, [ebp+14h] (the aspect)
+	const uint8_t kTanCamera4Bytes[] = { 0xd9, 0x44, 0x24, 0x14, 0xe8, 0xe2, 0x0a, 0x0b, 0x00, 0xd9, 0x5c, 0x24, 0x14,
+	                                     0x8b, 0x86, 0x00, 0x01, 0x00, 0x00, 0xd9, 0x44, 0x24, 0x14, 0x8b, 0xb6, 0xfc, 0x00,
+	                                     0x00, 0x00, 0xd9, 0x44, 0x24, 0x0c, 0xf3, 0x0f, 0x10, 0x4d, 0x14 };
+	// fld [esp+18h] / call tan / fstp [esp+18h] / mov eax, [esi+100h] / fld [esp+18h] / mov ecx, [esi+0fch] /
+	// fld [esp+1ch] / cvtss2sd xmm1, [esp+20h] (viewport width) ... cvtss2sd xmm6, [esp+24h] (height)
+	const uint8_t kTanCamera5Bytes[] = { 0xd9, 0x44, 0x24, 0x18, 0xe8, 0x42, 0x33, 0x17, 0x00, 0xd9, 0x5c, 0x24, 0x18,
+	                                     0x8b, 0x86, 0x00, 0x01, 0x00, 0x00, 0xd9, 0x44, 0x24, 0x18, 0x8b, 0x8e, 0xfc, 0x00,
+	                                     0x00, 0x00, 0xd9, 0x44, 0x24, 0x1c, 0xf3, 0x0f, 0x5a, 0x4c, 0x24, 0x20 };
 	bool g_hor_plus = true;
 	std::string g_fov_status = "not installed";
 	float g_fov_seen[8] = {};
@@ -701,6 +718,30 @@ namespace
 		}
 	}
 
+	float __cdecl hor_factor_wh(float w, float h)
+	{
+		return h > 0.0f ? hor_factor(w / h) : 1.0f;
+	}
+
+	// 0x64aca0: the aspect is the viewport's width / height, the caller's [esp+20h] / [esp+24h]
+	__declspec(naked) void tan_camera5_thunk()
+	{
+		__asm
+		{
+			mov eax, 7BE1C4h               // kTanThunk
+			call eax
+			sub esp, 4
+			fstp dword ptr [esp]
+			push dword ptr [esp + 2Ch]     // the caller's [esp+24h]: + return address + our slot
+			push dword ptr [esp + 2Ch]     // the caller's [esp+20h] (one more push above it)
+			call hor_factor_wh
+			add esp, 8
+			fmul dword ptr [esp]
+			add esp, 4
+			ret
+		}
+	}
+
 	// the call at `call_site` (5 bytes, inside `expect` starting 4 bytes earlier) goes to `target`
 	bool redirect_call(uintptr_t call_site, const uint8_t *expect, size_t len, void *target)
 	{
@@ -729,8 +770,13 @@ namespace
 		}
 		const bool a = redirect_call(kTanCamera, kTanCameraBytes, sizeof kTanCameraBytes, reinterpret_cast<void *>(&tan_camera_thunk));
 		const bool b = redirect_call(kTanCamera2, kTanCamera2Bytes, sizeof kTanCamera2Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
-		g_fov_status = a && b ? "Hor+ installed" : a ? "Hor+ on the camera only (second projection not found)" :
-			b ? "Hor+ on the second projection only (camera projection not found)" : "unexpected game build: Hor+ off";
+		const bool c = redirect_call(kTanCamera3, kTanCamera3Bytes, sizeof kTanCamera3Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
+		const bool d = redirect_call(kTanCamera4, kTanCamera4Bytes, sizeof kTanCamera4Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
+		const bool e = redirect_call(kTanCamera5, kTanCamera5Bytes, sizeof kTanCamera5Bytes, reinterpret_cast<void *>(&tan_camera5_thunk));
+		const int n = a + b + c + d + e;
+		char buf[96];
+		sprintf_s(buf, "Hor+ on %d of 5 projections (%d%d%d%d%d)", n, a, b, c, d, e);
+		g_fov_status = n ? buf : "unexpected game build: Hor+ off";
 	}
 
 	// =========================================================================================================
@@ -1666,12 +1712,12 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
 			sprintf_s(old_addon, "%sghwtde_ultrawide.addon32", exe);
 		if (old_addon[0] != 0 && GetFileAttributesA(old_addon) != INVALID_FILE_ATTRIBUTES)
 		{
-			log_msg("GHWT:DE Ultrawide Fix 1.1: 3D FOV %s; 2D layer OFF: delete the old ghwtde_ultrawide.addon32 (1.0) from the game folder",
+			log_msg("GHWT:DE Ultrawide Fix 1.2: 3D FOV %s; 2D layer OFF: delete the old ghwtde_ultrawide.addon32 (1.0) from the game folder",
 				g_fov_status.c_str());
 			return TRUE;
 		}
 		const bool ok = hook_import();
-		log_msg("GHWT:DE Ultrawide Fix 1.1: %s (d3d9: %s); 3D FOV: %s", ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found",
+		log_msg("GHWT:DE Ultrawide Fix 1.2: %s (d3d9: %s); 3D FOV: %s", ok ? "Direct3DCreate9 hooked" : "Direct3DCreate9 import NOT found",
 			d3d9_provider(), g_fov_status.c_str());
 	}
 	else if (reason == DLL_PROCESS_DETACH && g_catalog != nullptr)
