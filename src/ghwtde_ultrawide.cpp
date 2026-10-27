@@ -659,6 +659,9 @@ namespace
 	const uint8_t kTanCamera5Bytes[] = { 0xd9, 0x44, 0x24, 0x18, 0xe8, 0x42, 0x33, 0x17, 0x00, 0xd9, 0x5c, 0x24, 0x18,
 	                                     0x8b, 0x86, 0x00, 0x01, 0x00, 0x00, 0xd9, 0x44, 0x24, 0x18, 0x8b, 0x8e, 0xfc, 0x00,
 	                                     0x00, 0x00, 0xd9, 0x44, 0x24, 0x1c, 0xf3, 0x0f, 0x5a, 0x4c, 0x24, 0x20 };
+	// which projections get Hor+ (bit 0 = 0x70dd00 ... bit 4 = 0x64ae7d). 1.2 with all five crashed the game at boot
+	// (2026-10-27, 0xc0000005 at 0x4d7022, three runs): 0x70d6dd and 0x64ae7d stay off by default until one is cleared
+	int g_hor_sites = 0x07;
 	bool g_hor_plus = true;
 	std::string g_fov_status = "not installed";
 	float g_fov_seen[8] = {};
@@ -768,14 +771,15 @@ namespace
 			g_fov_status = "not GHWT_Definitive.exe: off";
 			return;
 		}
-		const bool a = redirect_call(kTanCamera, kTanCameraBytes, sizeof kTanCameraBytes, reinterpret_cast<void *>(&tan_camera_thunk));
-		const bool b = redirect_call(kTanCamera2, kTanCamera2Bytes, sizeof kTanCamera2Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
-		const bool c = redirect_call(kTanCamera3, kTanCamera3Bytes, sizeof kTanCamera3Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
-		const bool d = redirect_call(kTanCamera4, kTanCamera4Bytes, sizeof kTanCamera4Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
-		const bool e = redirect_call(kTanCamera5, kTanCamera5Bytes, sizeof kTanCamera5Bytes, reinterpret_cast<void *>(&tan_camera5_thunk));
+		const int on = g_hor_sites;
+		const bool a = (on & 1) && redirect_call(kTanCamera, kTanCameraBytes, sizeof kTanCameraBytes, reinterpret_cast<void *>(&tan_camera_thunk));
+		const bool b = (on & 2) && redirect_call(kTanCamera2, kTanCamera2Bytes, sizeof kTanCamera2Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
+		const bool c = (on & 4) && redirect_call(kTanCamera3, kTanCamera3Bytes, sizeof kTanCamera3Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
+		const bool d = (on & 8) && redirect_call(kTanCamera4, kTanCamera4Bytes, sizeof kTanCamera4Bytes, reinterpret_cast<void *>(&tan_camera2_thunk));
+		const bool e = (on & 16) && redirect_call(kTanCamera5, kTanCamera5Bytes, sizeof kTanCamera5Bytes, reinterpret_cast<void *>(&tan_camera5_thunk));
 		const int n = a + b + c + d + e;
 		char buf[96];
-		sprintf_s(buf, "Hor+ on %d of 5 projections (%d%d%d%d%d)", n, a, b, c, d, e);
+		sprintf_s(buf, "Hor+ on %d of 5 projections (%d%d%d%d%d, HorPlusSites=%d)", n, a, b, c, d, e, on);
 		g_fov_status = n ? buf : "unexpected game build: Hor+ off";
 	}
 
@@ -1373,6 +1377,7 @@ namespace
 		read_bool("AnchorInHud", g_anchor_in_hud);
 		read_bool("Catalog", g_catalog_on);
 		read_bool("HorPlus", g_hor_plus);
+		read_int("HorPlusSites", g_hor_sites);
 		read_int("MinImageSize", g_min_image);
 		read_mode("FullScreenImages", g_full_image);
 		read_mode("FullWidth", g_full_other);
