@@ -3,7 +3,7 @@ Run build.bat first. The ASI loader (dinput8.dll) it bundles comes from ASI_LOAD
 E:/Dev/ghwt/asi-loader-9.7.4/dinput8.dll)."""
 import os, shutil
 
-VERSION = '1.1'
+VERSION = '1.2'
 ROOT = os.path.dirname(os.path.abspath(__file__))
 ASI_LOADER = os.environ.get('ASI_LOADER', r'E:\Dev\ghwt\asi-loader-9.7.4\dinput8.dll')
 

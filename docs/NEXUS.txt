@@ -35,6 +35,9 @@ Ultimate ASI Loader by ThirteenAG (MIT). The fix is also bundled with my GH5 / W
 ---------------------------------------------------------------------------
 Changelog (Nexus changelog field)
 
+1.2
+- Band close-up camera shots no longer zoomed in on ultrawide (Hor+ on one more 3D projection).
+- New setting HorPlusSites (which projections get Hor+; the default is the tested set).
 1.1
 - Gameplay no longer zoomed in on ultrawide: the 3D view keeps 16:9's vertical field of view (Hor+).
 - ASI plugin instead of a ReShade add-on: works with any ReShade preset, GShade, DXVK or no ReShade.

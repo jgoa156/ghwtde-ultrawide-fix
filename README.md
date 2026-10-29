@@ -1,4 +1,4 @@
-# GHWT:DE Ultrawide Fix (v1.1)
+# GHWT:DE Ultrawide Fix (v1.2)
 
 An ASI plugin for **Guitar Hero World Tour: Definitive Edition** (32-bit, Direct3D 9) for screens wider than 16:9.
 By **WitchDoctoR**.
@@ -10,9 +10,12 @@ By **WitchDoctoR**.
 - **No ReShade needed (1.1):** it hooks the game's own Direct3D 9 device, so it works with any ReShade version or
   preset (or none), GShade and DXVK. Loaded by an ASI loader (included).
 
-**Download:** [`releases/GHWTDE-Ultrawide-Fix_1.1.zip`](releases/GHWTDE-Ultrawide-Fix_1.1.zip) or the
+**Download:** [`releases/GHWTDE-Ultrawide-Fix_1.2.zip`](releases/GHWTDE-Ultrawide-Fix_1.2.zip) or the
 [Releases page](https://github.com/jgoa156/ghwtde-ultrawide-fix/releases/latest). Install instructions are in the
 zip's README. Updating from 1.0: delete `ghwtde_ultrawide.addon32`.
+
+**1.2:** Hor+ on a third projection (`0x711bac`): the band close-up shots are no longer zoomed in. `HorPlusSites`
+(bitmask, default 7) picks the projections; the two others found (`0x70d6dd`, `0x64ae7d`) crashed at boot and stay off.
 
 ## 3D field of view (1.1)
 

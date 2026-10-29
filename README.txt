@@ -1,4 +1,4 @@
-GHWT:DE Ultrawide Fix  (v1.1)
+GHWT:DE Ultrawide Fix  (v1.2)
 =============================
 By WitchDoctoR
 
@@ -7,7 +7,8 @@ whole 2D layer sideways (HUD, menus, text) and zooms the 3D view in: it keeps 16
 cuts picture off at the top and bottom, so the highway runs off the bottom of the screen and no longer lines up with
 the HUD. This plugin fixes both:
   - 3D (v1.1): the venue, band and highway keep 16:9's vertical field of view and show more at the sides (Hor+):
-    the highway is the same size as on a 16:9 screen and sits right next to the HUD again.
+    the highway is the same size as on a 16:9 screen and sits right next to the HUD again. v1.2 also fixes the
+    band close-up camera shots that were still zoomed in.
   - 2D: the HUD, menus and text are drawn as the closest 16:9 picture, centred (1920x1080 inside 2560x1080).
 
 v1.1 is an ASI plugin and no longer needs ReShade: it works with any ReShade version or preset (or none), GShade,
@@ -32,7 +33,7 @@ INSTALL (into the folder with GHWT_Definitive.exe)
 UNINSTALL
   Delete ghwtde_ultrawide.asi and ghwtde_ultrawide.ini (and dinput8.dll if you copied it only for this).
 
-KNOWN LIMITS (v1.1)
+KNOWN LIMITS (v1.2)
   - Face-off / battle HUDs are not adjusted yet (centred 16:9).
   - Screens the plugin has no rule for stay a centred 16:9 picture (the 3D scene shows at the sides).
   - The per-element modes and the 3D fix hook GHWT_Definitive.exe; on another game build they switch off
@@ -42,6 +43,8 @@ KNOWN LIMITS (v1.1)
 SETTINGS (ghwtde_ultrawide.ini, section [GHWTDE_ULTRAWIDE]; all optional. A [GHWTDE_ULTRAWIDE] section left in
 ReShade.ini by v1.0 is still read for keys the ini does not set)
   HorPlus=1              3D view keeps 16:9's vertical field of view on wider screens (0 = the game's zoomed view)
+  HorPlusSites=7         which of the game's five 3D projections get it (bits 1 / 2 / 4 / 8 / 16; default 7 = the
+                         three tested ones; 8 and 16 crashed the game at boot, leave them off)
   Enabled=1              2D layer as a centred 16:9 picture
   ElementModes=1         per-element modes below (0 = everything centred, as in v0.1)
   FullScreenImages=cover full-screen sprites with a large texture (backgrounds): cover | stretch | keep
